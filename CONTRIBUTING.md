@@ -74,23 +74,16 @@ PR 작성 기준:
 
 - 제목도 Conventional Commits 형식을 사용합니다.
 - PR 본문에 문제, 해결 방법, 검증 결과, 위험 요소를 기록합니다.
-- UI 또는 API 출력 변경은 캡처나 요청·응답 예시를 첨부합니다.
 - 관련 이슈를 `Closes #123` 형식으로 연결합니다.
 - Draft PR은 논의용으로 사용하고 병합 준비가 끝나면 Ready로 전환합니다.
-- 작성자는 자신의 PR을 단독 승인하지 않습니다.
 
-## 리뷰와 병합
+## 병합
 
-- 최소 1명의 승인을 받은 후 병합합니다.
-- 미해결 리뷰 대화가 있으면 병합하지 않습니다.
-- 필수 CI가 모두 통과해야 합니다.
-- 기본 병합 방식은 `Squash and merge`입니다.
 - Squash 커밋 제목은 PR 제목과 동일하게 정리합니다.
-- 병합 후 작업 브랜치를 삭제합니다.
 
 ## 보호가 필요한 변경
 
-다음 변경은 보안·아키텍처 리뷰가 필요합니다.
+다음 변경은 특히 신중하게 검증합니다.
 
 - Cloud KMS, IAM, Service Account
 - Policy Gate와 거래 한도
@@ -107,12 +100,5 @@ PR 작성 기준:
 `main`에 다음 규칙을 적용합니다.
 
 - Require a pull request before merging
-- Require at least 1 approval
-- Dismiss stale approvals on new commits
-- Require conversation resolution
-- Require status checks to pass
-- Require branches to be up to date
 - Block force pushes
 - Block branch deletion
-- Do not allow bypassing for 일반 개발 작업
-

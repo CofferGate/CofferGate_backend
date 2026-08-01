@@ -24,3 +24,4 @@ npm run dev
 - `GET /api/v1/system/readiness`
 - `GET /api/v1/proposals`
 - `GET /api/v1/proposals/:proposalId`
+- `GET /api/v1/policy/current`

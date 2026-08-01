@@ -2,11 +2,16 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   apiResponseSchema,
+  policySchema,
   proposalSchema,
   systemReadinessSchema,
 } from "./contracts/index.js";
 import type { AppConfig } from "./config.js";
 import { HttpApiError } from "./errors/http-api-error.js";
+import {
+  InMemoryPolicyRepository,
+  type PolicyRepository,
+} from "./repositories/policy-repository.js";
 import {
   InMemoryProposalRepository,
   type ProposalRepository,
@@ -17,6 +22,7 @@ export interface AppDependencies {
   config: AppConfig;
   readinessService?: SystemReadinessService;
   proposalRepository?: ProposalRepository;
+  policyRepository?: PolicyRepository;
 }
 
 export function createApp(dependencies: AppDependencies): FastifyInstance {
@@ -32,6 +38,8 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
     });
   const proposalRepository =
     dependencies.proposalRepository ?? new InMemoryProposalRepository();
+  const policyRepository =
+    dependencies.policyRepository ?? new InMemoryPolicyRepository();
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof HttpApiError) {
@@ -103,6 +111,19 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
       return apiResponseSchema(proposalSchema).parse(response);
     },
   );
+
+  app.get("/api/v1/policy/current", async (request) => {
+    const response = {
+      data: await policyRepository.getCurrent(),
+      meta: {
+        requestId: request.id,
+        generatedAt: new Date().toISOString(),
+        environment: dependencies.config.ENVIRONMENT,
+      },
+    };
+
+    return apiResponseSchema(policySchema.nullable()).parse(response);
+  });
 
   return app;
 }

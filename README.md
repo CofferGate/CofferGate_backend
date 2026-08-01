@@ -83,6 +83,15 @@ TARGET_USDC_BALANCE='20' \
 
 운영 배포는 기본 `LOG_LEVEL=info`로 요청과 Proposal 생성·제출·확인 결과를 구조화 로그로 기록합니다. `x-coffergate-task-token` Header는 로그에서 자동으로 마스킹됩니다.
 
+배포 후 실제 자금 이동 없이 Devnet IAM·Liveness·Readiness를 검증합니다.
+
+```bash
+PROJECT_ID='your-project-id' \
+REGION='asia-northeast3' \
+SERVICE_NAME='coffergate-backend' \
+./scripts/verify-devnet-runtime.sh
+```
+
 ### Scheduled proposal generation
 
 Cloud Run 배포와 내부 Token Secret 생성 후 다음 환경 변수를 설정해 Cloud Scheduler Job을 생성하거나 갱신합니다.

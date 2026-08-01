@@ -12,6 +12,7 @@ const configSchema = z.object({
   FIRESTORE_PROPOSALS_COLLECTION: z.string().min(1).default("proposals"),
   FIRESTORE_POLICIES_COLLECTION: z.string().min(1).default("policies"),
   FIRESTORE_CURRENT_POLICY_DOCUMENT: z.string().min(1).default("current"),
+  FIRESTORE_DAILY_USAGE_COLLECTION: z.string().min(1).default("dailyUsage"),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

@@ -5,6 +5,7 @@ import type {
   FirestoreDatabase,
   FirestoreDocumentSnapshot,
 } from "../../src/infrastructure/firestore.js";
+import { FirestoreDailyUsageRepository } from "../../src/repositories/daily-usage-repository.js";
 import { FirestorePolicyRepository } from "../../src/repositories/policy-repository.js";
 import { FirestoreProposalRepository } from "../../src/repositories/proposal-repository.js";
 
@@ -165,4 +166,52 @@ test("Firestore repositories reject invalid document contracts", async () => {
   );
 
   await assert.rejects(() => repository.getCurrent());
+});
+
+test("Firestore daily usage repository returns validated UTC usage", async () => {
+  const repository = new FirestoreDailyUsageRepository(
+    createDatabase({
+      dailyUsage: {
+        "2026-08-01": {
+          date: "2026-08-01",
+          amountUsd: 12.5,
+          updatedAt: "2026-08-01T06:00:00.000Z",
+        },
+      },
+    }),
+  );
+
+  assert.equal(await repository.getUsageUsd("2026-08-01"), 12.5);
+  assert.equal(await repository.getUsageUsd("2026-08-02"), 0);
+});
+
+test("Firestore daily usage repository rejects invalid or mismatched data", async () => {
+  const invalidAmount = new FirestoreDailyUsageRepository(
+    createDatabase({
+      dailyUsage: {
+        "2026-08-01": {
+          date: "2026-08-01",
+          amountUsd: -1,
+          updatedAt: "2026-08-01T06:00:00.000Z",
+        },
+      },
+    }),
+  );
+  const mismatchedDate = new FirestoreDailyUsageRepository(
+    createDatabase({
+      dailyUsage: {
+        "2026-08-01": {
+          date: "2026-08-02",
+          amountUsd: 1,
+          updatedAt: "2026-08-01T06:00:00.000Z",
+        },
+      },
+    }),
+  );
+
+  await assert.rejects(() => invalidAmount.getUsageUsd("2026-08-01"));
+  await assert.rejects(
+    () => mismatchedDate.getUsageUsd("2026-08-01"),
+    /does not match date/,
+  );
 });

@@ -110,6 +110,26 @@ test("Firestore proposal repository lists and finds validated proposals", async 
   assert.equal(await repository.findById("missing"), null);
 });
 
+test("Firestore proposal repository atomically creates reviewed proposals", async () => {
+  const database = createDatabase({});
+  const repository = new FirestoreProposalRepository(database);
+  const reviewedProposal: Proposal = {
+    ...proposal,
+    status: "AI_REVIEWED",
+  };
+
+  assert.equal(await repository.create(reviewedProposal), "CREATED");
+  assert.equal(await repository.create(reviewedProposal), "ALREADY_EXISTS");
+  assert.equal(
+    await repository.create({ ...reviewedProposal, rationale: "changed" }),
+    "ID_CONFLICT",
+  );
+  assert.deepEqual(
+    await repository.findById(reviewedProposal.proposalId),
+    reviewedProposal,
+  );
+});
+
 test("Firestore proposal repository rejects mismatched document IDs", async () => {
   const repository = new FirestoreProposalRepository(
     createDatabase({ proposals: { wrong_id: proposal } }),

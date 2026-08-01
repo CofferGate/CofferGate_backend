@@ -7,6 +7,7 @@ import {
 import type { FirestoreDatabase } from "../infrastructure/firestore.js";
 
 export interface ProposalRepository {
+  create(proposal: Proposal): Promise<ProposalCreateResult>;
   list(): Promise<Proposal[]>;
   findById(proposalId: string): Promise<Proposal | null>;
   savePolicyEvaluation(
@@ -15,16 +16,60 @@ export interface ProposalRepository {
   ): Promise<ProposalEvaluationSaveResult>;
 }
 
+export type ProposalCreateResult =
+  | "CREATED"
+  | "ALREADY_EXISTS"
+  | "ID_CONFLICT";
+
 export type ProposalEvaluationSaveResult =
   | "SAVED"
   | "NOT_FOUND"
   | "STATUS_CONFLICT";
+
+function validateProposalCreation(proposal: Proposal): Proposal {
+  const validatedProposal = proposalSchema.parse(proposal);
+  if (
+    validatedProposal.status !== "AI_REVIEWED" ||
+    validatedProposal.decision !== undefined ||
+    validatedProposal.ruleChecks.length !== 0 ||
+    validatedProposal.execution !== undefined
+  ) {
+    throw new Error("Proposal does not contain a valid creation state.");
+  }
+  return validatedProposal;
+}
+
+function proposalsMatch(left: Proposal, right: Proposal): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
 
 export class FirestoreProposalRepository implements ProposalRepository {
   constructor(
     private readonly database: FirestoreDatabase,
     private readonly collectionName = "proposals",
   ) {}
+
+  async create(proposal: Proposal): Promise<ProposalCreateResult> {
+    const validatedProposal = validateProposalCreation(proposal);
+    const reference = this.database
+      .collection(this.collectionName)
+      .doc(validatedProposal.proposalId);
+
+    return this.database.runTransaction(async (transaction) => {
+      const document = await transaction.get(reference);
+      if (document.exists) {
+        const existingProposal = this.parseDocument(
+          document.id,
+          document.data(),
+        );
+        return proposalsMatch(existingProposal, validatedProposal)
+          ? "ALREADY_EXISTS"
+          : "ID_CONFLICT";
+      }
+      transaction.set(reference, validatedProposal);
+      return "CREATED";
+    });
+  }
 
   async list(): Promise<Proposal[]> {
     const snapshot = await this.database.collection(this.collectionName).get();
@@ -78,6 +123,7 @@ export class FirestoreProposalRepository implements ProposalRepository {
     }
     return proposal;
   }
+
 }
 
 export class InMemoryProposalRepository implements ProposalRepository {
@@ -88,6 +134,18 @@ export class InMemoryProposalRepository implements ProposalRepository {
     this.proposals = new Map(
       validatedProposals.map((proposal) => [proposal.proposalId, proposal]),
     );
+  }
+
+  async create(proposal: Proposal): Promise<ProposalCreateResult> {
+    const validatedProposal = validateProposalCreation(proposal);
+    const existingProposal = this.proposals.get(validatedProposal.proposalId);
+    if (existingProposal) {
+      return proposalsMatch(existingProposal, validatedProposal)
+        ? "ALREADY_EXISTS"
+        : "ID_CONFLICT";
+    }
+    this.proposals.set(validatedProposal.proposalId, validatedProposal);
+    return "CREATED";
   }
 
   async list(): Promise<Proposal[]> {

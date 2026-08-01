@@ -98,6 +98,16 @@ export function decodeUnsignedVersionedTransaction(value: string): Buffer {
   if (transaction.length === 0 || transaction.length > 1_232) {
     throw new JupiterSwapError("Jupiter swap transaction has an invalid size.");
   }
+  inspectUnsignedVersionedTransaction(transaction);
+  return transaction;
+}
+
+export function inspectUnsignedVersionedTransaction(transaction: Buffer): {
+  signatureCount: number;
+  signatureOffset: number;
+  messageOffset: number;
+  message: Buffer;
+} {
   const { value: signatureCount, bytesRead } = decodeShortVector(transaction);
   const messageOffset = bytesRead + signatureCount * 64;
   if (signatureCount < 1 || messageOffset + 2 > transaction.length) {
@@ -114,7 +124,12 @@ export function decodeUnsignedVersionedTransaction(value: string): Buffer {
   if (requiredSignatures !== signatureCount) {
     throw new JupiterSwapError("Jupiter swap signature count does not match its message.");
   }
-  return transaction;
+  return {
+    signatureCount,
+    signatureOffset: bytesRead,
+    messageOffset,
+    message: transaction.subarray(messageOffset),
+  };
 }
 
 function decodeShortVector(buffer: Buffer): { value: number; bytesRead: number } {

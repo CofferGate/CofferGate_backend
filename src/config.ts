@@ -20,6 +20,8 @@ const configSchema = z.object({
     .default(5),
   REPOSITORY_MODE: z.enum(["memory", "firestore"]).default("memory"),
   GOOGLE_CLOUD_PROJECT: z.string().min(1).optional(),
+  VERTEX_AI_LOCATION: z.string().min(1).default("us-central1"),
+  VERTEX_AI_MODEL: z.string().min(1).default("gemini-2.5-flash"),
   FIRESTORE_DATABASE_ID: z.string().min(1).default("(default)"),
   FIRESTORE_PROPOSALS_COLLECTION: z.string().min(1).default("proposals"),
   FIRESTORE_POLICIES_COLLECTION: z.string().min(1).default("policies"),

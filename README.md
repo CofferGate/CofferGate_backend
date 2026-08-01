@@ -19,7 +19,7 @@ GOOGLE_CLOUD_PROJECT=your-project-id
 FIRESTORE_DATABASE_ID='(default)'
 ```
 
-Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current` 문서에서 조회합니다. 컬렉션명과 현재 Policy 문서 ID는 환경 변수로 변경할 수 있습니다.
+Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current`, 일일 사용량은 `dailyUsage/{YYYY-MM-DD}` 문서에서 조회합니다. 컬렉션명과 현재 Policy 문서 ID는 환경 변수로 변경할 수 있습니다.
 
 ## Contract policy
 

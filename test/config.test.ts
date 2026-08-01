@@ -15,6 +15,7 @@ test("configuration has Cloud Run compatible defaults", () => {
     FIRESTORE_PROPOSALS_COLLECTION: "proposals",
     FIRESTORE_POLICIES_COLLECTION: "policies",
     FIRESTORE_CURRENT_POLICY_DOCUMENT: "current",
+    FIRESTORE_DAILY_USAGE_COLLECTION: "dailyUsage",
   });
 });
 

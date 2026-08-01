@@ -114,3 +114,41 @@ test("internal proposal generation rejects an unconfigured policy", async () => 
   assert.equal(response.json().retryable, false);
   await app.close();
 });
+
+test("scheduled proposal generation reuses one ID across retries", async () => {
+  const proposalIds: string[] = [];
+  const app = createApp({
+    config,
+    trustedProposalGenerationService: {
+      async generate(proposalId: string) {
+        proposalIds.push(proposalId);
+        return { status: "ID_CONFLICT" };
+      },
+    } as never,
+    taskRequestAuthorizer: new TaskTokenAuthorizer(token),
+  });
+  const headers = {
+    "x-coffergate-task-token": token,
+    "x-cloudscheduler-jobname": "projects/p/locations/l/jobs/generate",
+    "x-cloudscheduler-scheduletime": "2026-08-01T06:00:00Z",
+  };
+
+  await app.inject({ method: "POST", url: "/internal/v1/proposals/generate/scheduled", headers });
+  await app.inject({ method: "POST", url: "/internal/v1/proposals/generate/scheduled", headers });
+
+  assert.equal(proposalIds.length, 2);
+  assert.equal(proposalIds[0], proposalIds[1]);
+  await app.close();
+});
+
+test("scheduled proposal generation requires scheduler identity headers", async () => {
+  const app = createInternalApp({ status: "EVALUATED" });
+  const response = await app.inject({
+    method: "POST",
+    url: "/internal/v1/proposals/generate/scheduled",
+    headers: { "x-coffergate-task-token": token },
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().retryable, false);
+  await app.close();
+});

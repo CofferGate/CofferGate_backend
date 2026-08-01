@@ -216,3 +216,66 @@ test("Solana RPC provider rejects invalid simulation inputs and responses", asyn
   await assert.rejects(() => provider.simulateTransaction(Buffer.alloc(1_233)));
   await assert.rejects(() => provider.simulateTransaction(Buffer.from([1]), -1));
 });
+
+test("Solana RPC provider submits signed transactions with preflight", async () => {
+  const signature = Buffer.alloc(64, 1);
+  const signedTransaction = Buffer.concat([
+    Buffer.from([1]), signature, Buffer.from([0x80, 1, 0, 0]),
+  ]);
+  const expectedSignature =
+    "2AXDGYSE4f2sz7tvMMzyHvUfcoJmxudvdhBcmiUSo6ijwfYmfZYsKRxboQMPh3R4kUhXRVdtSXFXMheka4Rc4P2";
+  const mock = createFetch([
+    { jsonrpc: "2.0", result: expectedSignature, id: 1 },
+  ]);
+  const provider = new SolanaRpcProvider({
+    endpoint: "https://api.devnet.solana.com",
+    fetch: mock.fetch,
+  });
+
+  assert.equal(
+    await provider.sendTransaction(signedTransaction, {
+      minContextSlot: 324307186,
+      maxRetries: 5,
+    }),
+    expectedSignature,
+  );
+  const request = mock.requests[0] as {
+    method: string;
+    params: [string, Record<string, unknown>];
+  };
+  assert.equal(request.method, "sendTransaction");
+  assert.equal(request.params[0], signedTransaction.toString("base64"));
+  assert.deepEqual(request.params[1], {
+    encoding: "base64",
+    skipPreflight: false,
+    preflightCommitment: "confirmed",
+    maxRetries: 5,
+    minContextSlot: 324307186,
+  });
+});
+
+test("Solana RPC provider rejects unsafe transaction submissions", async () => {
+  const signature = Buffer.alloc(64, 1);
+  const signedTransaction = Buffer.concat([
+    Buffer.from([1]), signature, Buffer.from([0x80, 1, 0, 0]),
+  ]);
+  const provider = new SolanaRpcProvider({
+    endpoint: "https://api.devnet.solana.com",
+    fetch: createFetch([
+      { jsonrpc: "2.0", result: "mismatched-signature", id: 1 },
+    ]).fetch,
+  });
+
+  await assert.rejects(
+    () => provider.sendTransaction(signedTransaction),
+    /mismatched transaction signature/,
+  );
+  await assert.rejects(
+    () => provider.sendTransaction(Buffer.concat([
+      Buffer.from([1]), Buffer.alloc(64), Buffer.from([0x80, 1, 0, 0]),
+    ])),
+    /must be signed/,
+  );
+  await assert.rejects(() => provider.sendTransaction(signedTransaction, { maxRetries: -1 }));
+  await assert.rejects(() => provider.sendTransaction(signedTransaction, { minContextSlot: -1 }));
+});

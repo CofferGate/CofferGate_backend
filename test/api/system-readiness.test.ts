@@ -9,6 +9,7 @@ const config = {
   HOST: "0.0.0.0",
   ENVIRONMENT: "devnet",
   DATA_MODE: "live",
+  OPERATIONS_WALLET_ADDRESS: "unconfigured",
 } as const;
 
 test("GET /health/live reports process liveness", async () => {

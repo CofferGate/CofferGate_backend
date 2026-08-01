@@ -5,6 +5,7 @@ const configSchema = z.object({
   HOST: z.string().default("0.0.0.0"),
   ENVIRONMENT: z.enum(["mock", "devnet", "mainnet-beta"]).default("devnet"),
   DATA_MODE: z.enum(["mock", "live"]).default("live"),
+  OPERATIONS_WALLET_ADDRESS: z.string().default("unconfigured"),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

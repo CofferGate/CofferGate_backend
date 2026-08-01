@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   apiResponseSchema,
+  consoleSnapshotSchema,
   policySchema,
   proposalSchema,
   systemReadinessSchema,
@@ -17,12 +18,14 @@ import {
   type ProposalRepository,
 } from "./repositories/proposal-repository.js";
 import { SystemReadinessService } from "./services/system-readiness.js";
+import { DashboardSnapshotService } from "./services/dashboard-snapshot.js";
 
 export interface AppDependencies {
   config: AppConfig;
   readinessService?: SystemReadinessService;
   proposalRepository?: ProposalRepository;
   policyRepository?: PolicyRepository;
+  dashboardSnapshotService?: DashboardSnapshotService;
 }
 
 export function createApp(dependencies: AppDependencies): FastifyInstance {
@@ -40,6 +43,17 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
     dependencies.proposalRepository ?? new InMemoryProposalRepository();
   const policyRepository =
     dependencies.policyRepository ?? new InMemoryPolicyRepository();
+  const dashboardSnapshotService =
+    dependencies.dashboardSnapshotService ??
+    new DashboardSnapshotService({
+      dataMode: dependencies.config.DATA_MODE,
+      policyRepository,
+      walletStateProvider: {
+        async getState() {
+          return { address: dependencies.config.OPERATIONS_WALLET_ADDRESS };
+        },
+      },
+    });
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof HttpApiError) {
@@ -123,6 +137,20 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
     };
 
     return apiResponseSchema(policySchema.nullable()).parse(response);
+  });
+
+  app.get("/api/v1/dashboard", async (request) => {
+    const meta = {
+      requestId: request.id,
+      generatedAt: new Date().toISOString(),
+      environment: dependencies.config.ENVIRONMENT,
+    };
+    const response = {
+      data: await dashboardSnapshotService.getSnapshot(meta),
+      meta,
+    };
+
+    return apiResponseSchema(consoleSnapshotSchema).parse(response);
   });
 
   return app;

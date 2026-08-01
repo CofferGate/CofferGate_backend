@@ -8,6 +8,7 @@ test("configuration has Cloud Run compatible defaults", () => {
     HOST: "0.0.0.0",
     ENVIRONMENT: "devnet",
     DATA_MODE: "live",
+    OPERATIONS_WALLET_ADDRESS: "unconfigured",
   });
 });
 

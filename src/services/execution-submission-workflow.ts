@@ -1,8 +1,9 @@
 import type { ExecutionSummary, Proposal } from "../contracts/index.js";
+import { encodeBase58 } from "../encoding/base58.js";
 import type { JupiterQuote, JupiterQuoteRequest } from "../providers/jupiter-quote.js";
 import type { SignedSolanaTransaction } from "../providers/cloud-kms-signer.js";
 import type { UnsignedJupiterSwapTransaction } from "../providers/jupiter-swap.js";
-import type { ExecutionSubmissionRepository } from "../repositories/execution-submission-repository.js";
+import type { ExecutionIntent, ExecutionSubmissionRepository } from "../repositories/execution-submission-repository.js";
 import type { ProposalRepository } from "../repositories/proposal-repository.js";
 import type { PolicyRepository } from "../repositories/policy-repository.js";
 import type { ExecutionSimulationService } from "./execution-simulation.js";
@@ -39,6 +40,10 @@ export class ExecutionSubmissionWorkflow {
   async execute(proposalId: string): Promise<ExecutionSubmissionResult> {
     const proposal = await this.dependencies.proposalRepository.findById(proposalId);
     if (!proposal) return { status: "NOT_FOUND" };
+    if (proposal.status === "EXECUTING") {
+      const intent = await this.dependencies.submissionRepository.findPrepared(proposalId);
+      return intent ? this.submitPrepared(intent) : { status: "CONFLICT" };
+    }
     if (!this.isExecutable(proposal)) return { status: "NOT_EXECUTABLE" };
     const now = this.dependencies.now?.() ?? new Date();
     const policy = await this.dependencies.policyRepository.getCurrent();
@@ -83,29 +88,46 @@ export class ExecutionSubmissionWorkflow {
       beforeOutputBalanceAtomic: beforeBalance.amountAtomic,
       expectedOutputDeltaAtomic: quote.expectedOutputAmountAtomic,
     };
-    if (await this.dependencies.submissionRepository.claim(proposalId, execution) !== "CLAIMED") {
+    const signed = await this.dependencies.signer.signTransaction(unsigned.serializedTransaction);
+    const prepared = await this.dependencies.submissionRepository.prepare(proposalId, {
+      proposalId,
+      serializedTransactionBase64: signed.serializedTransaction.toString("base64"),
+      transactionSignature: encodeBase58(signed.signature),
+      minContextSlot: quote.contextSlot,
+      lastValidBlockHeight: unsigned.lastValidBlockHeight,
+      execution: {
+        ...execution,
+        kmsKeyVersion: signed.kmsKeyVersion,
+      },
+      preparedAt: now.toISOString(),
+    });
+    if (!("intent" in prepared)) {
       return { status: "CONFLICT" };
     }
+    return this.submitPrepared(prepared.intent);
+  }
 
-    const signed = await this.dependencies.signer.signTransaction(unsigned.serializedTransaction);
+  private async submitPrepared(intent: ExecutionIntent): Promise<ExecutionSubmissionResult> {
+    const serializedTransaction = Buffer.from(intent.serializedTransactionBase64, "base64");
     const signature = await this.dependencies.submitter.sendTransaction(
-      signed.serializedTransaction,
-      { minContextSlot: quote.contextSlot },
+      serializedTransaction,
+      { minContextSlot: intent.minContextSlot },
     );
+    if (signature !== intent.transactionSignature) return { status: "CONFLICT" };
     const submittedExecution: ExecutionSummary = {
-      ...execution,
-      kmsKeyVersion: signed.kmsKeyVersion,
+      ...intent.execution,
+      kmsRequested: true,
       transactionSignature: signature,
-      submittedAt: now.toISOString(),
+      submittedAt: (this.dependencies.now?.() ?? new Date()).toISOString(),
     };
     const saved = await this.dependencies.submissionRepository.markSubmitted(
-      proposalId,
+      intent.proposalId,
       submittedExecution,
     );
     if (saved !== "SUBMITTED" && saved !== "ALREADY_SUBMITTED") {
       return { status: "CONFLICT" };
     }
-    await this.dependencies.confirmationScheduler.schedule(proposalId);
+    await this.dependencies.confirmationScheduler.schedule(intent.proposalId);
     return { status: "SUBMITTED", signature };
   }
 

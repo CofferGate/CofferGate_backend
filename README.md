@@ -36,7 +36,7 @@ SIMULATION_COMPUTE_MARGIN_BPS='2000'
 MAX_COMPUTE_UNITS='1400000'
 ```
 
-Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current`, 일일 사용량은 `dailyUsage/{YYYY-MM-DD}` 문서에서 조회합니다. 컬렉션명과 현재 Policy 문서 ID는 환경 변수로 변경할 수 있습니다.
+Proposal은 `proposals/{proposalId}`, 서명된 실행 Intent는 `executionIntents/{proposalId}`, 현재 Policy는 `policies/current`, 일일 사용량은 `dailyUsage/{YYYY-MM-DD}` 문서에서 조회합니다. 컬렉션명과 현재 Policy 문서 ID는 환경 변수로 변경할 수 있습니다.
 
 확정 실행의 사용량은 `dailyUsageLedger/{executionId}`를 멱등 원장으로 사용해 `dailyUsage/{YYYY-MM-DD}`에 원자적으로 누적합니다.
 

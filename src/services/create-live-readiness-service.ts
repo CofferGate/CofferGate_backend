@@ -59,14 +59,13 @@ export function createLiveReadinessService(config: AppConfig): SystemReadinessSe
   });
   const dependencies: LiveReadinessDependencies = {
     async checkFirestore() {
-      await database.collection(config.FIRESTORE_PROPOSALS_COLLECTION).doc("__readiness__").get();
+      await database.collection(config.FIRESTORE_PROPOSALS_COLLECTION).doc("readiness-probe").get();
     },
     async checkKms() {
       const [key] = await kms.getPublicKey({ name: keyVersionName });
-      if (
-        !key.pem ||
-        key.algorithm !== protos.google.cloud.kms.v1.CryptoKeyVersion.CryptoKeyVersionAlgorithm.EC_SIGN_ED25519
-      ) throw new Error("Configured KMS key is not Ed25519.");
+      if (!isEd25519PublicKey(key)) {
+        throw new Error("Configured KMS key is not Ed25519.");
+      }
     },
     async checkJupiter() { await jupiter.getSolPrice(); },
     async checkSolana() { await solana.getBlockHeight(); },
@@ -76,6 +75,19 @@ export function createLiveReadinessService(config: AppConfig): SystemReadinessSe
     network: "devnet",
     probes: createLiveReadinessProbes(config, dependencies),
   });
+}
+
+export function isEd25519PublicKey(key: {
+  pem?: string | null;
+  algorithm?: string | number | null;
+}): boolean {
+  const ed25519 =
+    protos.google.cloud.kms.v1.CryptoKeyVersion.CryptoKeyVersionAlgorithm
+      .EC_SIGN_ED25519;
+  return Boolean(
+    key.pem &&
+    (key.algorithm === "EC_SIGN_ED25519" || key.algorithm === ed25519),
+  );
 }
 
 async function checked(

@@ -11,6 +11,7 @@ test("configuration has Cloud Run compatible defaults", () => {
     OPERATIONS_WALLET_ADDRESS: "unconfigured",
     SOLANA_RPC_URL: "https://api.devnet.solana.com",
     SOLANA_RPC_TIMEOUT_MS: 5000,
+    INTERNAL_TASK_TOKEN: undefined,
     REPOSITORY_MODE: "memory",
     GOOGLE_CLOUD_PROJECT: undefined,
     FIRESTORE_DATABASE_ID: "(default)",

@@ -45,7 +45,6 @@ export function createRepositories(config: AppConfig): AppRepositories {
     dailyUsageRepository: new FirestoreDailyUsageRepository(
       database,
       config.FIRESTORE_DAILY_USAGE_COLLECTION,
-      config.FIRESTORE_DAILY_USAGE_LEDGER_COLLECTION,
     ),
   };
 }

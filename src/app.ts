@@ -19,11 +19,9 @@ import {
 } from "./repositories/proposal-repository.js";
 import { SystemReadinessService } from "./services/system-readiness.js";
 import { DashboardSnapshotService } from "./services/dashboard-snapshot.js";
-import type { ExecutionConfirmationPoller } from "./services/execution-confirmation-poller.js";
 import type { TaskRequestAuthorizer } from "./security/task-request-authorizer.js";
 import type { TrustedProposalGenerationService } from "./services/trusted-proposal-generation.js";
 import { createScheduledProposalId } from "./services/scheduled-proposal-id.js";
-import type { ExecutionSubmissionWorkflow } from "./services/execution-submission-workflow.js";
 
 const internalProposalGenerationRequestSchema = z.object({
   proposalId: z.string().min(1),
@@ -43,8 +41,6 @@ export interface AppDependencies {
   proposalRepository?: ProposalRepository;
   policyRepository?: PolicyRepository;
   dashboardSnapshotService?: DashboardSnapshotService;
-  executionConfirmationPoller?: ExecutionConfirmationPoller;
-  executionSubmissionWorkflow?: ExecutionSubmissionWorkflow;
   trustedProposalGenerationService?: TrustedProposalGenerationService;
   taskRequestAuthorizer?: TaskRequestAuthorizer;
 }
@@ -65,10 +61,7 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
     dependencies.readinessService ??
     new SystemReadinessService({
       dataMode: dependencies.config.DATA_MODE,
-      network:
-        dependencies.config.ENVIRONMENT === "mainnet-beta"
-          ? "mainnet-beta"
-          : "devnet",
+      network: "devnet",
     });
   const proposalRepository =
     dependencies.proposalRepository ?? new InMemoryProposalRepository();
@@ -185,86 +178,10 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
   });
 
   if (
-    (dependencies.executionConfirmationPoller ||
-      dependencies.executionSubmissionWorkflow ||
-      dependencies.trustedProposalGenerationService) &&
+    dependencies.trustedProposalGenerationService &&
     !dependencies.taskRequestAuthorizer
   ) {
     throw new Error("Task request authorizer is required for internal routes.");
-  }
-
-  if (dependencies.executionConfirmationPoller) {
-    app.post<{ Params: { proposalId: string } }>(
-      "/internal/v1/executions/:proposalId/confirm",
-      async (request, reply) => {
-        const taskToken = request.headers["x-coffergate-task-token"];
-        if (!dependencies.taskRequestAuthorizer?.authorize(
-          typeof taskToken === "string" ? taskToken : undefined,
-        )) {
-          return reply.status(401).send({ status: "UNAUTHORIZED", retryable: false });
-        }
-        const result = await dependencies.executionConfirmationPoller?.poll(
-          request.params.proposalId,
-        );
-        request.log.info({
-          event: "execution.confirmation.polled",
-          proposalId: request.params.proposalId,
-          resultStatus: result?.status,
-        });
-        if (result?.status === "WAITING") {
-          return reply
-            .header("retry-after", "5")
-            .status(503)
-            .send({ ...result, retryable: true });
-        }
-        if (
-          result?.status === "TRANSACTION_FAILED" &&
-          result.persistence !== "FAILED" &&
-          result.persistence !== "ALREADY_FAILED"
-        ) {
-          return reply
-            .header("retry-after", "5")
-            .status(503)
-            .send({ ...result, retryable: true });
-        }
-        return reply.status(200).send({ ...result, retryable: false });
-      },
-    );
-  }
-
-  if (dependencies.executionSubmissionWorkflow) {
-    app.post<{ Params: { proposalId: string } }>(
-      "/internal/v1/executions/:proposalId/submit",
-      async (request, reply) => {
-        const taskToken = request.headers["x-coffergate-task-token"];
-        if (!dependencies.taskRequestAuthorizer?.authorize(
-          typeof taskToken === "string" ? taskToken : undefined,
-        )) {
-          return reply.status(401).send({ status: "UNAUTHORIZED", retryable: false });
-        }
-        const result = await dependencies.executionSubmissionWorkflow?.execute(
-          request.params.proposalId,
-        );
-        request.log.info({
-          event: "execution.submission.completed",
-          proposalId: request.params.proposalId,
-          resultStatus: result?.status,
-        });
-        if (result?.status === "NOT_FOUND") {
-          return reply.status(404).send({ ...result, retryable: false });
-        }
-        if (result?.status === "CONFLICT") {
-          return reply.status(409).send({ ...result, retryable: true });
-        }
-        if (result?.status === "SIMULATION_FAILED") {
-          return reply.status(422).send({ ...result, retryable: false });
-        }
-        if (result?.status === "NOT_EXECUTABLE" || result?.status === "POLICY_REJECTED" || result?.status === "PROGRAM_REJECTED" || result?.status === "INTENT_EXPIRED") {
-          return reply.status(409).send({ ...result, retryable: false });
-        }
-        return reply.status(200).send({ ...result, retryable: false });
-      },
-    );
   }
 
   if (dependencies.trustedProposalGenerationService) {

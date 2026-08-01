@@ -31,7 +31,7 @@ export const systemReadinessSchema = z
     overallStatus: serviceReadinessStatusSchema,
     checkedAt: z.string().datetime(),
     dataMode: z.enum(["mock", "live"]),
-    network: z.enum(["devnet", "mainnet-beta"]),
+    network: z.literal("devnet"),
     services: z.array(serviceReadinessSchema),
   })
   .superRefine((readiness, context) => {

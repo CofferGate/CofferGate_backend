@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const apiEnvironmentSchema = z.enum(["mock", "devnet", "mainnet-beta"]);
+export const apiEnvironmentSchema = z.enum(["mock", "devnet"]);
 
 export const apiMetaSchema = z.object({
   requestId: z.string().min(1),

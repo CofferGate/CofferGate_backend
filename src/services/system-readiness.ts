@@ -21,7 +21,7 @@ export type ReadinessProbes = Partial<Record<SystemServiceId, ReadinessProbe>>;
 
 export interface SystemReadinessServiceOptions {
   dataMode: "mock" | "live";
-  network: "devnet" | "mainnet-beta";
+  network: "devnet";
   probes?: ReadinessProbes;
   now?: () => Date;
 }
@@ -38,7 +38,7 @@ function deriveOverallStatus(
 
 export class SystemReadinessService {
   private readonly dataMode: "mock" | "live";
-  private readonly network: "devnet" | "mainnet-beta";
+  private readonly network: "devnet";
   private readonly probes: ReadinessProbes;
   private readonly now: () => Date;
 

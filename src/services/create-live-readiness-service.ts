@@ -67,7 +67,7 @@ export function createLiveReadinessService(config: AppConfig): SystemReadinessSe
   };
   return new SystemReadinessService({
     dataMode: config.DATA_MODE,
-    network: config.ENVIRONMENT === "mainnet-beta" ? "mainnet-beta" : "devnet",
+    network: "devnet",
     probes: createLiveReadinessProbes(config, dependencies),
   });
 }

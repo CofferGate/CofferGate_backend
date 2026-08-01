@@ -59,7 +59,8 @@ function createDatabase(
 
   return {
     collection(collectionPath) {
-      const records = collections[collectionPath] ?? {};
+      const records =
+        collections[collectionPath] ?? (collections[collectionPath] = {});
       return {
         async get() {
           return {
@@ -214,4 +215,41 @@ test("Firestore daily usage repository rejects invalid or mismatched data", asyn
     () => mismatchedDate.getUsageUsd("2026-08-01"),
     /does not match date/,
   );
+});
+
+test("Firestore daily usage atomically records each execution once", async () => {
+  const database = createDatabase({});
+  const repository = new FirestoreDailyUsageRepository(database);
+  const entry = {
+    executionId: "execution_01",
+    date: "2026-08-01",
+    amountUsd: 4.83,
+    recordedAt: "2026-08-01T06:00:00.000Z",
+  };
+
+  assert.equal(await repository.recordConfirmedExecution(entry), "RECORDED");
+  assert.equal(
+    await repository.recordConfirmedExecution(entry),
+    "ALREADY_RECORDED",
+  );
+  assert.equal(await repository.getUsageUsd(entry.date), entry.amountUsd);
+});
+
+test("Firestore daily usage rejects conflicting execution records", async () => {
+  const database = createDatabase({});
+  const repository = new FirestoreDailyUsageRepository(database);
+  const entry = {
+    executionId: "execution_01",
+    date: "2026-08-01",
+    amountUsd: 4.83,
+    recordedAt: "2026-08-01T06:00:00.000Z",
+  };
+  await repository.recordConfirmedExecution(entry);
+
+  assert.equal(
+    await repository.recordConfirmedExecution({ ...entry, date: "2026-08-02" }),
+    "IDEMPOTENCY_CONFLICT",
+  );
+  assert.equal(await repository.getUsageUsd(entry.date), entry.amountUsd);
+  assert.equal(await repository.getUsageUsd("2026-08-02"), 0);
 });

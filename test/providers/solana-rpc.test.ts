@@ -131,3 +131,88 @@ test("Solana RPC provider rejects RPC errors and malformed balances", async () =
   });
   await assert.rejects(() => malformedProvider.getTokenBalance("invalid"));
 });
+
+test("Solana RPC provider simulates unsigned transactions", async () => {
+  const mock = createFetch([
+    {
+      jsonrpc: "2.0",
+      result: {
+        context: { slot: 393226680 },
+        value: {
+          err: null,
+          logs: ["Program swap success"],
+          unitsConsumed: 1714,
+          replacementBlockhash: {
+            blockhash: "replacement-blockhash",
+            lastValidBlockHeight: 381186895,
+          },
+        },
+      },
+      id: 1,
+    },
+  ]);
+  const provider = new SolanaRpcProvider({
+    endpoint: "https://api.devnet.solana.com",
+    fetch: mock.fetch,
+  });
+
+  assert.deepEqual(await provider.simulateTransaction(Buffer.from([1, 2, 3]), 324307186), {
+    ok: true,
+    slot: 393226680,
+    unitsConsumed: 1714,
+    logs: ["Program swap success"],
+    replacementBlockhash: "replacement-blockhash",
+    lastValidBlockHeight: 381186895,
+  });
+  const request = mock.requests[0] as {
+    method: string;
+    params: [string, Record<string, unknown>];
+  };
+  assert.equal(request.method, "simulateTransaction");
+  assert.equal(request.params[0], Buffer.from([1, 2, 3]).toString("base64"));
+  assert.deepEqual(request.params[1], {
+    commitment: "confirmed",
+    encoding: "base64",
+    replaceRecentBlockhash: true,
+    sigVerify: false,
+    minContextSlot: 324307186,
+  });
+});
+
+test("Solana RPC provider returns simulation program failures", async () => {
+  const provider = new SolanaRpcProvider({
+    endpoint: "https://api.devnet.solana.com",
+    fetch: createFetch([
+      {
+        jsonrpc: "2.0",
+        result: {
+          context: { slot: 393226680 },
+          value: {
+            err: { InstructionError: [2, { Custom: 6001 }] },
+            logs: ["Program log: Slippage tolerance exceeded"],
+            unitsConsumed: 201234,
+          },
+        },
+        id: 1,
+      },
+    ]).fetch,
+  });
+
+  assert.deepEqual(await provider.simulateTransaction(Buffer.from([1])), {
+    ok: false,
+    slot: 393226680,
+    error: { InstructionError: [2, { Custom: 6001 }] },
+    unitsConsumed: 201234,
+    logs: ["Program log: Slippage tolerance exceeded"],
+  });
+});
+
+test("Solana RPC provider rejects invalid simulation inputs and responses", async () => {
+  const provider = new SolanaRpcProvider({
+    endpoint: "https://api.devnet.solana.com",
+    fetch: createFetch([]).fetch,
+  });
+  await assert.rejects(() => provider.simulateTransaction(Buffer.alloc(0)));
+  await assert.rejects(() => provider.simulateTransaction(Buffer.alloc(1_233)));
+  await assert.rejects(() => provider.simulateTransaction(Buffer.from([1]), -1));
+});

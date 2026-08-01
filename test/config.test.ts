@@ -9,6 +9,8 @@ test("configuration has Cloud Run compatible defaults", () => {
     ENVIRONMENT: "devnet",
     DATA_MODE: "live",
     OPERATIONS_WALLET_ADDRESS: "unconfigured",
+    SOLANA_RPC_URL: "https://api.devnet.solana.com",
+    SOLANA_RPC_TIMEOUT_MS: 5000,
     REPOSITORY_MODE: "memory",
     GOOGLE_CLOUD_PROJECT: undefined,
     FIRESTORE_DATABASE_ID: "(default)",

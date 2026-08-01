@@ -6,6 +6,8 @@ const configSchema = z.object({
   ENVIRONMENT: z.enum(["mock", "devnet", "mainnet-beta"]).default("devnet"),
   DATA_MODE: z.enum(["mock", "live"]).default("live"),
   OPERATIONS_WALLET_ADDRESS: z.string().default("unconfigured"),
+  SOLANA_RPC_URL: z.url().default("https://api.devnet.solana.com"),
+  SOLANA_RPC_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   REPOSITORY_MODE: z.enum(["memory", "firestore"]).default("memory"),
   GOOGLE_CLOUD_PROJECT: z.string().min(1).optional(),
   FIRESTORE_DATABASE_ID: z.string().min(1).default("(default)"),

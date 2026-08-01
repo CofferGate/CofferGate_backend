@@ -21,6 +21,8 @@ FIRESTORE_DATABASE_ID='(default)'
 
 Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current`, 일일 사용량은 `dailyUsage/{YYYY-MM-DD}` 문서에서 조회합니다. 컬렉션명과 현재 Policy 문서 ID는 환경 변수로 변경할 수 있습니다.
 
+확정 실행의 사용량은 `dailyUsageLedger/{executionId}`를 멱등 원장으로 사용해 `dailyUsage/{YYYY-MM-DD}`에 원자적으로 누적합니다.
+
 ## Contract policy
 
 - 외부 API는 프론트엔드 v5 Zod 계약과 동일한 camelCase DTO를 반환합니다.

@@ -96,3 +96,15 @@ test("Vertex provider rejects incomplete, malformed, and empty output", async ()
     /no proposal content/,
   );
 });
+
+test("Vertex provider rejects untrusted generation input", async () => {
+  await assert.rejects(() =>
+    createProvider(
+      JSON.stringify({
+        action: "NO_ACTION",
+        rationale: "No action.",
+        confidence: 1,
+      }),
+    ).generate({ ...input, solBalance: "not-a-balance" }),
+  );
+});

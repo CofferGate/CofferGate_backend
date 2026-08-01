@@ -21,6 +21,11 @@ import { SystemReadinessService } from "./services/system-readiness.js";
 import { DashboardSnapshotService } from "./services/dashboard-snapshot.js";
 import type { ExecutionConfirmationPoller } from "./services/execution-confirmation-poller.js";
 import type { TaskRequestAuthorizer } from "./security/task-request-authorizer.js";
+import {
+  vertexProposalGenerationInputSchema,
+  type VertexProposalGenerationInput,
+} from "./providers/vertex-proposal.js";
+import type { ProposalGenerationEvaluationService } from "./services/proposal-generation-evaluation.js";
 
 type ApiConfig = Pick<
   AppConfig,
@@ -36,6 +41,7 @@ export interface AppDependencies {
   policyRepository?: PolicyRepository;
   dashboardSnapshotService?: DashboardSnapshotService;
   executionConfirmationPoller?: ExecutionConfirmationPoller;
+  proposalGenerationEvaluationService?: ProposalGenerationEvaluationService;
   taskRequestAuthorizer?: TaskRequestAuthorizer;
 }
 
@@ -164,10 +170,15 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
     return apiResponseSchema(consoleSnapshotSchema).parse(response);
   });
 
+  if (
+    (dependencies.executionConfirmationPoller ||
+      dependencies.proposalGenerationEvaluationService) &&
+    !dependencies.taskRequestAuthorizer
+  ) {
+    throw new Error("Task request authorizer is required for internal routes.");
+  }
+
   if (dependencies.executionConfirmationPoller) {
-    if (!dependencies.taskRequestAuthorizer) {
-      throw new Error("Task request authorizer is required for internal routes.");
-    }
     app.post<{ Params: { proposalId: string } }>(
       "/internal/v1/executions/:proposalId/confirm",
       async (request, reply) => {
@@ -195,6 +206,48 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
             .header("retry-after", "5")
             .status(503)
             .send({ ...result, retryable: true });
+        }
+        return reply.status(200).send({ ...result, retryable: false });
+      },
+    );
+  }
+
+  if (dependencies.proposalGenerationEvaluationService) {
+    const proposalGenerationEvaluationService =
+      dependencies.proposalGenerationEvaluationService;
+    app.post<{ Body: VertexProposalGenerationInput }>(
+      "/internal/v1/proposals/generate",
+      async (request, reply) => {
+        const taskToken = request.headers["x-coffergate-task-token"];
+        if (!dependencies.taskRequestAuthorizer?.authorize(
+          typeof taskToken === "string" ? taskToken : undefined,
+        )) {
+          return reply.status(401).send({ status: "UNAUTHORIZED", retryable: false });
+        }
+        const parsedRequest = vertexProposalGenerationInputSchema.safeParse(
+          request.body,
+        );
+        if (!parsedRequest.success) {
+          return reply.status(400).send({
+            status: "INVALID_REQUEST",
+            retryable: false,
+          });
+        }
+
+        const result = await proposalGenerationEvaluationService.generateAndEvaluate(
+          parsedRequest.data,
+        );
+        if (result.status === "PERSISTENCE_INCONSISTENCY") {
+          return reply
+            .header("retry-after", "5")
+            .status(503)
+            .send({ ...result, retryable: true });
+        }
+        if (result.status === "CONFLICT") {
+          return reply.status(409).send({ ...result, retryable: true });
+        }
+        if (result.status === "ID_CONFLICT") {
+          return reply.status(409).send({ ...result, retryable: false });
         }
         return reply.status(200).send({ ...result, retryable: false });
       },

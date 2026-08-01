@@ -40,6 +40,8 @@ MAX_COMPUTE_UNITS='1400000'
 
 Proposal은 `proposals/{proposalId}`, 서명된 실행 Intent는 `executionIntents/{proposalId}`, 현재 Policy는 `policies/current`, 일일 사용량은 `dailyUsage/{YYYY-MM-DD}` 문서에서 조회합니다. 컬렉션명과 현재 Policy 문서 ID는 환경 변수로 변경할 수 있습니다.
 
+`REPOSITORY_MODE=firestore`와 `DATA_MODE=live`를 함께 사용하면 서버 시작 전에 Firestore, 운영 지갑, USDC, Jupiter, Cloud KMS 및 Cloud Tasks 필수 설정을 모두 검증합니다. 누락된 통합 설정이 있으면 런타임을 시작하지 않습니다.
+
 확정 실행의 사용량은 `dailyUsageLedger/{executionId}`를 멱등 원장으로 사용해 `dailyUsage/{YYYY-MM-DD}`에 원자적으로 누적합니다.
 
 ## Contract policy

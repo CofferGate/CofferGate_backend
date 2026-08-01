@@ -9,6 +9,12 @@ test("configuration has Cloud Run compatible defaults", () => {
     ENVIRONMENT: "devnet",
     DATA_MODE: "live",
     OPERATIONS_WALLET_ADDRESS: "unconfigured",
+    REPOSITORY_MODE: "memory",
+    GOOGLE_CLOUD_PROJECT: undefined,
+    FIRESTORE_DATABASE_ID: "(default)",
+    FIRESTORE_PROPOSALS_COLLECTION: "proposals",
+    FIRESTORE_POLICIES_COLLECTION: "policies",
+    FIRESTORE_CURRENT_POLICY_DOCUMENT: "current",
   });
 });
 

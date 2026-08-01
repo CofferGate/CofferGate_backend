@@ -20,8 +20,15 @@ import {
 import { SystemReadinessService } from "./services/system-readiness.js";
 import { DashboardSnapshotService } from "./services/dashboard-snapshot.js";
 
+type ApiConfig = Pick<
+  AppConfig,
+  | "ENVIRONMENT"
+  | "DATA_MODE"
+  | "OPERATIONS_WALLET_ADDRESS"
+>;
+
 export interface AppDependencies {
-  config: AppConfig;
+  config: ApiConfig;
   readinessService?: SystemReadinessService;
   proposalRepository?: ProposalRepository;
   policyRepository?: PolicyRepository;

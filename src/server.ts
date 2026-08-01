@@ -3,6 +3,7 @@ import { loadConfig } from "./config.js";
 import { createRepositories } from "./repositories/create-repositories.js";
 import { TaskTokenAuthorizer } from "./security/task-request-authorizer.js";
 import { createExecutionConfirmationPoller } from "./services/create-execution-confirmation-poller.js";
+import { createProposalGenerationEvaluationService } from "./services/create-proposal-generation-evaluation.js";
 
 const config = loadConfig();
 const repositories = createRepositories(config);
@@ -13,6 +14,8 @@ const internalDependencies =
           config,
           repositories.proposalRepository,
         ),
+        proposalGenerationEvaluationService:
+          createProposalGenerationEvaluationService(config, repositories),
         taskRequestAuthorizer: new TaskTokenAuthorizer(
           config.INTERNAL_TASK_TOKEN,
         ),

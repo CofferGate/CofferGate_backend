@@ -46,3 +46,4 @@ Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current`, 일�
 - `GET /api/v1/policy/current`
 - `GET /api/v1/dashboard`
 - `POST /internal/v1/executions/:proposalId/confirm` (Firestore mode, Cloud Run OIDC + 내부 Token 인증)
+- `POST /internal/v1/proposals/generate` (Firestore mode, Cloud Run OIDC + 내부 Token 인증)

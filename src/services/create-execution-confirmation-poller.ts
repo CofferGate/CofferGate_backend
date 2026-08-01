@@ -2,6 +2,7 @@ import type { AppConfig } from "../config.js";
 import { createFirestoreDatabase } from "../infrastructure/firestore.js";
 import { SolanaRpcProvider } from "../providers/solana-rpc.js";
 import { FirestoreExecutionCompletionRepository } from "../repositories/execution-completion-repository.js";
+import { FirestoreExecutionFailureRepository } from "../repositories/execution-failure-repository.js";
 import type { ProposalRepository } from "../repositories/proposal-repository.js";
 import { ExecutionCompletionWorkflow } from "./execution-completion-workflow.js";
 import { ExecutionConfirmationPoller } from "./execution-confirmation-poller.js";
@@ -33,5 +34,9 @@ export function createExecutionConfirmationPoller(
       reconciliationService,
       completionRepository,
     }),
+    new FirestoreExecutionFailureRepository(
+      database,
+      config.FIRESTORE_PROPOSALS_COLLECTION,
+    ),
   );
 }

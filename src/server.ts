@@ -1,7 +1,7 @@
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { createRepositories } from "./repositories/create-repositories.js";
-import { BearerTaskRequestAuthorizer } from "./security/task-request-authorizer.js";
+import { TaskTokenAuthorizer } from "./security/task-request-authorizer.js";
 import { createExecutionConfirmationPoller } from "./services/create-execution-confirmation-poller.js";
 
 const config = loadConfig();
@@ -13,7 +13,7 @@ const internalDependencies =
           config,
           repositories.proposalRepository,
         ),
-        taskRequestAuthorizer: new BearerTaskRequestAuthorizer(
+        taskRequestAuthorizer: new TaskTokenAuthorizer(
           config.INTERNAL_TASK_TOKEN,
         ),
       }

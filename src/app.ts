@@ -171,7 +171,10 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
     app.post<{ Params: { proposalId: string } }>(
       "/internal/v1/executions/:proposalId/confirm",
       async (request, reply) => {
-        if (!dependencies.taskRequestAuthorizer?.authorize(request.headers.authorization)) {
+        const taskToken = request.headers["x-coffergate-task-token"];
+        if (!dependencies.taskRequestAuthorizer?.authorize(
+          typeof taskToken === "string" ? taskToken : undefined,
+        )) {
           return reply.status(401).send({ status: "UNAUTHORIZED", retryable: false });
         }
         const result = await dependencies.executionConfirmationPoller?.poll(

@@ -5,9 +5,15 @@ import { TaskTokenAuthorizer } from "./security/task-request-authorizer.js";
 import { createProposalGenerationEvaluationService } from "./services/create-proposal-generation-evaluation.js";
 import { createLiveReadinessService } from "./services/create-live-readiness-service.js";
 import { createDemoAttestationService } from "./services/create-demo-attestation.js";
+import { createDashboardSnapshotService } from "./services/create-dashboard-snapshot.js";
 
 const config = loadConfig();
 const repositories = createRepositories(config);
+const dashboardSnapshotService = createDashboardSnapshotService(
+  config,
+  repositories.policyRepository,
+  repositories.dailyUsageRepository,
+);
 const internalDependencies =
   config.REPOSITORY_MODE === "firestore" && config.INTERNAL_TASK_TOKEN
     ? {
@@ -23,7 +29,12 @@ const internalDependencies =
         readinessService: createLiveReadinessService(config),
       }
     : {};
-const app = createApp({ config, ...repositories, ...internalDependencies });
+const app = createApp({
+  config,
+  ...repositories,
+  dashboardSnapshotService,
+  ...internalDependencies,
+});
 
 try {
   await app.listen({ port: config.PORT, host: config.HOST });

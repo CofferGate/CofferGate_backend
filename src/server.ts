@@ -5,6 +5,7 @@ import { TaskTokenAuthorizer } from "./security/task-request-authorizer.js";
 import { createExecutionConfirmationPoller } from "./services/create-execution-confirmation-poller.js";
 import { createProposalGenerationEvaluationService } from "./services/create-proposal-generation-evaluation.js";
 import { createExecutionSubmissionWorkflow } from "./services/create-execution-submission-workflow.js";
+import { createLiveReadinessService } from "./services/create-live-readiness-service.js";
 
 const config = loadConfig();
 const repositories = createRepositories(config);
@@ -24,6 +25,7 @@ const internalDependencies =
         taskRequestAuthorizer: new TaskTokenAuthorizer(
           config.INTERNAL_TASK_TOKEN,
         ),
+        readinessService: createLiveReadinessService(config),
       }
     : {};
 const app = createApp({ config, ...repositories, ...internalDependencies });

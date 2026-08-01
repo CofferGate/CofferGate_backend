@@ -15,6 +15,7 @@ const config = {
   HOST: "0.0.0.0",
   ENVIRONMENT: "devnet",
   DATA_MODE: "live",
+  OPERATIONS_WALLET_ADDRESS: "unconfigured",
 } as const;
 
 const proposal: Proposal = {

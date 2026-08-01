@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Policy, Proposal } from "../../src/contracts/index.js";
+import { InMemoryDailyUsageRepository } from "../../src/repositories/daily-usage-repository.js";
 import {
   InMemoryProposalRepository,
   type ProposalRepository,
@@ -46,13 +47,18 @@ const proposal: Proposal = {
 };
 
 const context = {
-  dailyUsageUsd: 10,
   now: new Date("2026-08-01T06:01:00.000Z"),
 };
 
-function createService(repository: ProposalRepository) {
+function createService(
+  repository: ProposalRepository,
+  dailyUsageUsd = 10,
+) {
   return new ProposalPolicyEvaluationService({
     proposalRepository: repository,
+    dailyUsageRepository: new InMemoryDailyUsageRepository(
+      new Map([["2026-08-01", dailyUsageUsd]]),
+    ),
     policyGate: new PolicyGateService({
       async getCurrentPolicy() {
         return policy;
@@ -73,6 +79,25 @@ test("proposal policy evaluation persists an approved transition", async () => {
     (await repository.findById(proposal.proposalId))?.status,
     "POLICY_APPROVED",
   );
+});
+
+test("proposal policy evaluation uses server-side daily usage", async () => {
+  const repository = new InMemoryProposalRepository([proposal]);
+  const result = await createService(repository, 17).evaluate(
+    proposal.proposalId,
+    context,
+  );
+
+  assert.equal(result.status, "EVALUATED");
+  if (result.status === "EVALUATED") {
+    assert.equal(result.proposal.decision, "BLOCK");
+    assert.equal(
+      result.proposal.ruleChecks.find(
+        (check) => check.code === "DAILY_LIMIT_USD",
+      )?.result,
+      "FAIL",
+    );
+  }
 });
 
 test("proposal policy evaluation rejects invalid and duplicate states", async () => {

@@ -1,9 +1,7 @@
 import type { Proposal } from "../contracts/index.js";
+import type { DailyUsageRepository } from "../repositories/daily-usage-repository.js";
 import type { ProposalRepository } from "../repositories/proposal-repository.js";
-import type {
-  PolicyEvaluationContext,
-  PolicyGateService,
-} from "./policy-gate.js";
+import type { PolicyGateService } from "./policy-gate.js";
 
 export type ProposalPolicyEvaluationResult =
   | { status: "EVALUATED"; proposal: Proposal }
@@ -14,6 +12,11 @@ export type ProposalPolicyEvaluationResult =
 export interface ProposalPolicyEvaluationDependencies {
   proposalRepository: ProposalRepository;
   policyGate: PolicyGateService;
+  dailyUsageRepository: DailyUsageRepository;
+}
+
+export interface ProposalPolicyEvaluationContext {
+  now?: Date;
 }
 
 export class ProposalPolicyEvaluationService {
@@ -23,7 +26,7 @@ export class ProposalPolicyEvaluationService {
 
   async evaluate(
     proposalId: string,
-    context: PolicyEvaluationContext,
+    context: ProposalPolicyEvaluationContext = {},
   ): Promise<ProposalPolicyEvaluationResult> {
     const proposal = await this.dependencies.proposalRepository.findById(
       proposalId,
@@ -35,9 +38,13 @@ export class ProposalPolicyEvaluationService {
       return { status: "INVALID_STATE" };
     }
 
+    const now = context.now ?? new Date();
+    const date = now.toISOString().slice(0, 10);
+    const dailyUsageUsd =
+      await this.dependencies.dailyUsageRepository.getUsageUsd(date);
     const evaluatedProposal = await this.dependencies.policyGate.evaluate(
       proposal,
-      context,
+      { dailyUsageUsd, now },
     );
     const saveResult =
       await this.dependencies.proposalRepository.savePolicyEvaluation(

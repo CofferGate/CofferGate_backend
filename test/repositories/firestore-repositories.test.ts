@@ -6,6 +6,7 @@ import type {
   FirestoreDocumentSnapshot,
 } from "../../src/infrastructure/firestore.js";
 import { FirestoreDailyUsageRepository } from "../../src/repositories/daily-usage-repository.js";
+import { FirestoreExecutionCompletionRepository } from "../../src/repositories/execution-completion-repository.js";
 import { FirestorePolicyRepository } from "../../src/repositories/policy-repository.js";
 import { FirestoreProposalRepository } from "../../src/repositories/proposal-repository.js";
 
@@ -252,4 +253,160 @@ test("Firestore daily usage rejects conflicting execution records", async () => 
   );
   assert.equal(await repository.getUsageUsd(entry.date), entry.amountUsd);
   assert.equal(await repository.getUsageUsd("2026-08-02"), 0);
+});
+
+const submittedProposal: Proposal = {
+  ...proposal,
+  amountUsd: 4.83,
+  status: "SUBMITTED",
+  execution: {
+    kmsRequested: true,
+    transactionSignature: "signature_01",
+    submittedAt: "2026-08-01T06:01:00.000Z",
+  },
+};
+
+const reconciledProposal: Proposal = {
+  ...submittedProposal,
+  status: "RECONCILED",
+  execution: {
+    ...submittedProposal.execution,
+    kmsRequested: true,
+    confirmedAt: "2026-08-01T06:02:00.000Z",
+    commitment: "confirmed",
+    reconciliation: {
+      beforeBalance: "10000000",
+      afterBalance: "14830000",
+      expectedDelta: "4830000",
+      actualDelta: "4830000",
+      status: "MATCHED",
+    },
+  },
+};
+
+test("Firestore execution completion atomically saves proposal and usage", async () => {
+  const database = createDatabase({
+    proposals: { [proposal.proposalId]: submittedProposal },
+  });
+  const completionRepository = new FirestoreExecutionCompletionRepository(
+    database,
+  );
+  const proposalRepository = new FirestoreProposalRepository(database);
+  const usageRepository = new FirestoreDailyUsageRepository(database);
+
+  assert.equal(
+    await completionRepository.complete(reconciledProposal),
+    "COMPLETED",
+  );
+  assert.deepEqual(
+    await proposalRepository.findById(proposal.proposalId),
+    reconciledProposal,
+  );
+  assert.equal(await usageRepository.getUsageUsd("2026-08-01"), 4.83);
+  assert.equal(
+    (
+      await database
+        .collection("dailyUsageLedger")
+        .doc("signature_01")
+        .get()
+    ).exists,
+    true,
+  );
+
+  assert.equal(
+    await completionRepository.complete(reconciledProposal),
+    "ALREADY_COMPLETED",
+  );
+  assert.equal(await usageRepository.getUsageUsd("2026-08-01"), 4.83);
+});
+
+test("Firestore execution completion counts confirmed mismatches", async () => {
+  const database = createDatabase({
+    proposals: { [proposal.proposalId]: submittedProposal },
+  });
+  const completionRepository = new FirestoreExecutionCompletionRepository(
+    database,
+  );
+  const failedProposal: Proposal = {
+    ...reconciledProposal,
+    status: "FAILED",
+    execution: {
+      ...reconciledProposal.execution,
+      kmsRequested: true,
+      reconciliation: {
+        ...reconciledProposal.execution?.reconciliation,
+        beforeBalance: "10000000",
+        afterBalance: "14829999",
+        expectedDelta: "4830000",
+        actualDelta: "4829999",
+        status: "MISMATCHED",
+      },
+    },
+  };
+
+  assert.equal(await completionRepository.complete(failedProposal), "COMPLETED");
+  assert.equal(
+    await new FirestoreDailyUsageRepository(database).getUsageUsd("2026-08-01"),
+    4.83,
+  );
+});
+
+test("Firestore execution completion rejects signature and ledger conflicts", async () => {
+  const signatureDatabase = createDatabase({
+    proposals: {
+      [proposal.proposalId]: {
+        ...submittedProposal,
+        execution: {
+          ...submittedProposal.execution,
+          transactionSignature: "different-signature",
+        },
+      },
+    },
+  });
+  assert.equal(
+    await new FirestoreExecutionCompletionRepository(signatureDatabase).complete(
+      reconciledProposal,
+    ),
+    "SIGNATURE_CONFLICT",
+  );
+
+  const ledgerDatabase = createDatabase({
+    proposals: { [proposal.proposalId]: submittedProposal },
+    dailyUsageLedger: {
+      signature_01: {
+        executionId: "signature_01",
+        date: "2026-08-01",
+        amountUsd: 4.83,
+        recordedAt: "2026-08-01T06:02:00.000Z",
+      },
+    },
+  });
+  assert.equal(
+    await new FirestoreExecutionCompletionRepository(ledgerDatabase).complete(
+      reconciledProposal,
+    ),
+    "IDEMPOTENCY_CONFLICT",
+  );
+  assert.equal(
+    (await new FirestoreProposalRepository(ledgerDatabase).findById(proposal.proposalId))
+      ?.status,
+    "SUBMITTED",
+  );
+  assert.equal(
+    await new FirestoreDailyUsageRepository(ledgerDatabase).getUsageUsd(
+      "2026-08-01",
+    ),
+    0,
+  );
+});
+
+test("Firestore execution completion rejects invalid completion payloads", async () => {
+  const repository = new FirestoreExecutionCompletionRepository(
+    createDatabase({ proposals: { [proposal.proposalId]: submittedProposal } }),
+  );
+
+  await assert.rejects(
+    () => repository.complete({ ...reconciledProposal, status: "CONFIRMED" }),
+    /valid execution completion/,
+  );
 });

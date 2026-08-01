@@ -22,3 +22,5 @@ npm run dev
 
 - `GET /health/live`
 - `GET /api/v1/system/readiness`
+- `GET /api/v1/proposals`
+- `GET /api/v1/proposals/:proposalId`

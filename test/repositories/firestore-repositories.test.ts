@@ -8,6 +8,7 @@ import type {
 import { FirestoreDailyUsageRepository } from "../../src/repositories/daily-usage-repository.js";
 import { FirestoreExecutionCompletionRepository } from "../../src/repositories/execution-completion-repository.js";
 import { FirestoreExecutionFailureRepository } from "../../src/repositories/execution-failure-repository.js";
+import { FirestoreExecutionSubmissionRepository } from "../../src/repositories/execution-submission-repository.js";
 import { FirestorePolicyRepository } from "../../src/repositories/policy-repository.js";
 import { FirestoreProposalRepository } from "../../src/repositories/proposal-repository.js";
 
@@ -158,6 +159,31 @@ test("Firestore proposal repository atomically saves one policy evaluation", asy
   assert.equal(
     await repository.savePolicyEvaluation(evaluatedProposal, "AI_REVIEWED"),
     "STATUS_CONFLICT",
+  );
+});
+
+test("Firestore execution submission atomically claims and submits proposals", async () => {
+  const approved = { ...proposal, decision: "AUTO" as const };
+  const database = createDatabase({ proposals: { [proposal.proposalId]: approved } });
+  const repository = new FirestoreExecutionSubmissionRepository(database);
+  const prepared = { kmsRequested: true, routeLabel: "Meteora" };
+  const submitted = {
+    ...prepared,
+    kmsKeyVersion: "projects/p/locations/l/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
+    transactionSignature: "signature-1",
+    submittedAt: "2026-08-01T06:01:00.000Z",
+  };
+
+  assert.equal(await repository.claim(proposal.proposalId, prepared), "CLAIMED");
+  assert.equal(await repository.claim(proposal.proposalId, prepared), "STATUS_CONFLICT");
+  assert.equal(await repository.markSubmitted(proposal.proposalId, submitted), "SUBMITTED");
+  assert.equal(
+    await repository.markSubmitted(proposal.proposalId, submitted),
+    "ALREADY_SUBMITTED",
+  );
+  assert.equal(
+    (await new FirestoreProposalRepository(database).findById(proposal.proposalId))?.status,
+    "SUBMITTED",
   );
 });
 

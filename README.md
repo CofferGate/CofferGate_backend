@@ -11,6 +11,8 @@ npm test
 npm run dev
 ```
 
+모든 PR과 `main` Push는 GitHub Actions에서 잠금 의존성 설치, 타입 검사, 테스트, 빌드, 운영 의존성 보안 검사와 Docker 이미지 빌드를 통과해야 합니다.
+
 Firestore를 사용할 때는 Application Default Credentials를 구성하고 다음 환경 변수를 설정합니다.
 
 ```bash

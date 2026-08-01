@@ -34,6 +34,7 @@ export function createExecutionSubmissionWorkflow(
     submissionRepository: new FirestoreExecutionSubmissionRepository(
       createFirestoreDatabase(config),
       config.FIRESTORE_PROPOSALS_COLLECTION,
+      config.FIRESTORE_EXECUTION_INTENTS_COLLECTION,
     ),
     quoteProvider: new JupiterQuoteProvider({
       apiKey,

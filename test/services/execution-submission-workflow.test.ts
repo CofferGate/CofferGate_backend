@@ -35,14 +35,17 @@ const policy = {
 
 function createWorkflow(overrides: Record<string, unknown> = {}) {
   const events: string[] = [];
-  let claimedExecution: unknown;
+  let preparedIntent: unknown;
+  const signature = "2AXDGYSE4f2sz7tvMMzyHvUfcoJmxudvdhBcmiUSo6ijwfYmfZYsKRxboQMPh3R4kUhXRVdtSXFXMheka4Rc4P2";
   const dependencies = {
     proposalRepository: { findById: async () => proposal },
     policyRepository: { getCurrent: async () => policy },
     submissionRepository: {
-      claim: async (_id: string, execution: unknown) => {
-        events.push("claim"); claimedExecution = execution; return "CLAIMED" as const;
+      prepare: async (_id: string, intent: unknown) => {
+        events.push("prepare"); preparedIntent = intent;
+        return { status: "PREPARED" as const, intent };
       },
+      findPrepared: async () => preparedIntent,
       markSubmitted: async () => { events.push("persist"); return "SUBMITTED" as const; },
     },
     quoteProvider: { getExactInQuote: async () => ({
@@ -62,36 +65,63 @@ function createWorkflow(overrides: Record<string, unknown> = {}) {
       events.push("sign");
       return { serializedTransaction: Buffer.from([2]), signature: Buffer.alloc(64, 1), kmsKeyVersion: "kms/key/1" };
     } },
-    submitter: { sendTransaction: async () => { events.push("send"); return "signature-1"; } },
+    submitter: { sendTransaction: async () => { events.push("send"); return signature; } },
     balanceProvider: { getTokenBalance: async () => ({ amountAtomic: "5000000" }) },
     confirmationScheduler: { schedule: async () => { events.push("schedule"); } },
     outputTokenAccount: "usdc-account",
     now: () => new Date("2026-08-01T06:01:00.000Z"),
     ...overrides,
   };
-  return { workflow: new ExecutionSubmissionWorkflow(dependencies as never), events, getClaim: () => claimedExecution };
+  return { workflow: new ExecutionSubmissionWorkflow(dependencies as never), events, getIntent: () => preparedIntent, signature };
 }
 
-test("execution submission claims before signing and schedules confirmation", async () => {
-  const { workflow, events, getClaim } = createWorkflow();
+test("execution submission persists signed intent before sending", async () => {
+  const { workflow, events, getIntent, signature } = createWorkflow();
 
   assert.deepEqual(await workflow.execute("proposal-1"), {
-    status: "SUBMITTED", signature: "signature-1",
+    status: "SUBMITTED", signature,
   });
-  assert.deepEqual(events, ["claim", "sign", "send", "persist", "schedule"]);
-  assert.equal((getClaim() as { beforeOutputBalanceAtomic: string }).beforeOutputBalanceAtomic, "5000000");
+  assert.deepEqual(events, ["sign", "prepare", "send", "persist", "schedule"]);
+  assert.equal((getIntent() as { execution: { beforeOutputBalanceAtomic: string } }).execution.beforeOutputBalanceAtomic, "5000000");
 });
 
-test("execution submission stops before signing on claim conflicts", async () => {
+test("execution submission stops before sending on prepare conflicts", async () => {
   const { workflow, events } = createWorkflow({
     submissionRepository: {
-      claim: async () => "STATUS_CONFLICT" as const,
+      prepare: async () => ({ status: "STATUS_CONFLICT" as const }),
+      findPrepared: async () => null,
       markSubmitted: async () => "STATUS_CONFLICT" as const,
     },
   });
 
   assert.deepEqual(await workflow.execute("proposal-1"), { status: "CONFLICT" });
-  assert.deepEqual(events, []);
+  assert.deepEqual(events, ["sign"]);
+});
+
+test("execution submission resumes the exact prepared transaction", async () => {
+  const base = createWorkflow();
+  const intent = {
+    proposalId: "proposal-1",
+    serializedTransactionBase64: Buffer.from([9]).toString("base64"),
+    transactionSignature: base.signature,
+    minContextSlot: 42,
+    lastValidBlockHeight: 100,
+    execution: { kmsRequested: true, kmsKeyVersion: "kms/key/1" },
+    preparedAt: "2026-08-01T06:00:30.000Z",
+  };
+  const resumed = createWorkflow({
+    proposalRepository: { findById: async () => ({ ...proposal, status: "EXECUTING" }) },
+    submissionRepository: {
+      prepare: async () => ({ status: "STATUS_CONFLICT" as const }),
+      findPrepared: async () => intent,
+      markSubmitted: async () => "SUBMITTED" as const,
+    },
+  });
+
+  assert.deepEqual(await resumed.workflow.execute("proposal-1"), {
+    status: "SUBMITTED", signature: base.signature,
+  });
+  assert.deepEqual(resumed.events, ["send", "schedule"]);
 });
 
 test("execution submission rejects ineligible and failed simulations", async () => {

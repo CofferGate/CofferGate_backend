@@ -37,6 +37,7 @@ test("configuration has Cloud Run compatible defaults", () => {
     VERTEX_AI_MODEL: "gemini-2.5-flash",
     FIRESTORE_DATABASE_ID: "(default)",
     FIRESTORE_PROPOSALS_COLLECTION: "proposals",
+    FIRESTORE_EXECUTION_INTENTS_COLLECTION: "executionIntents",
     FIRESTORE_POLICIES_COLLECTION: "policies",
     FIRESTORE_CURRENT_POLICY_DOCUMENT: "current",
     FIRESTORE_DAILY_USAGE_COLLECTION: "dailyUsage",

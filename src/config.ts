@@ -38,6 +38,7 @@ const configSchema = z.object({
   VERTEX_AI_MODEL: z.string().min(1).default("gemini-2.5-flash"),
   FIRESTORE_DATABASE_ID: z.string().min(1).default("(default)"),
   FIRESTORE_PROPOSALS_COLLECTION: z.string().min(1).default("proposals"),
+  FIRESTORE_EXECUTION_INTENTS_COLLECTION: z.string().min(1).default("executionIntents"),
   FIRESTORE_POLICIES_COLLECTION: z.string().min(1).default("policies"),
   FIRESTORE_CURRENT_POLICY_DOCUMENT: z.string().min(1).default("current"),
   FIRESTORE_DAILY_USAGE_COLLECTION: z.string().min(1).default("dailyUsage"),

@@ -22,6 +22,7 @@ import { DashboardSnapshotService } from "./services/dashboard-snapshot.js";
 import type { ExecutionConfirmationPoller } from "./services/execution-confirmation-poller.js";
 import type { TaskRequestAuthorizer } from "./security/task-request-authorizer.js";
 import type { TrustedProposalGenerationService } from "./services/trusted-proposal-generation.js";
+import { createScheduledProposalId } from "./services/scheduled-proposal-id.js";
 
 const internalProposalGenerationRequestSchema = z.object({
   proposalId: z.string().min(1),
@@ -255,6 +256,37 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
         return reply.status(200).send({ ...result, retryable: false });
       },
     );
+
+    app.post("/internal/v1/proposals/generate/scheduled", async (request, reply) => {
+      const taskToken = request.headers["x-coffergate-task-token"];
+      if (!dependencies.taskRequestAuthorizer?.authorize(
+        typeof taskToken === "string" ? taskToken : undefined,
+      )) {
+        return reply.status(401).send({ status: "UNAUTHORIZED", retryable: false });
+      }
+      const jobName = request.headers["x-cloudscheduler-jobname"];
+      const scheduleTime = request.headers["x-cloudscheduler-scheduletime"];
+      let proposalId: string;
+      try {
+        proposalId = createScheduledProposalId(
+          typeof jobName === "string" ? jobName : "",
+          typeof scheduleTime === "string" ? scheduleTime : "",
+        );
+      } catch {
+        return reply.status(400).send({ status: "INVALID_SCHEDULER_REQUEST", retryable: false });
+      }
+      const result = await trustedProposalGenerationService.generate(proposalId);
+      if (result.status === "PERSISTENCE_INCONSISTENCY") {
+        return reply.header("retry-after", "5").status(503).send({ ...result, retryable: true });
+      }
+      if (result.status === "CONFLICT") {
+        return reply.status(409).send({ ...result, retryable: true });
+      }
+      if (result.status === "ID_CONFLICT" || result.status === "POLICY_NOT_CONFIGURED") {
+        return reply.status(409).send({ ...result, retryable: false });
+      }
+      return reply.status(200).send({ ...result, retryable: false });
+    });
   }
 
   return app;

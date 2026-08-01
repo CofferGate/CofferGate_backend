@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ConfirmationTaskScheduler } from "../../src/providers/cloud-tasks.js";
+import { ConfirmationTaskScheduler, ExecutionTaskScheduler } from "../../src/providers/cloud-tasks.js";
 
 function createClient(createTask: (request: unknown) => Promise<unknown>) {
   return {
@@ -77,4 +77,31 @@ test("Cloud Tasks scheduler treats duplicate task names as idempotent", async ()
   const result = await scheduler.schedule("proposal_01");
   assert.equal(result.status, "ALREADY_SCHEDULED");
   assert.match(result.taskName, /^tasks\/confirm-[a-f0-9]{32}$/);
+});
+
+test("Cloud Tasks scheduler creates authenticated execution tasks", async () => {
+  let captured: unknown;
+  const scheduler = new ExecutionTaskScheduler({
+    projectId: "project",
+    location: "asia-northeast3",
+    queue: "execution",
+    targetBaseUrl: "https://backend.example.com",
+    oidcServiceAccountEmail: "tasks@project.iam.gserviceaccount.com",
+    internalTaskToken: "a".repeat(32),
+    client: createClient(async (request) => {
+      captured = request;
+      return [{ name: "created-execution-task" }];
+    }),
+  });
+
+  assert.deepEqual(await scheduler.schedule("proposal/01"), {
+    status: "SCHEDULED",
+    taskName: "created-execution-task",
+  });
+  const request = captured as { task: { name: string; httpRequest: { url: string } } };
+  assert.match(request.task.name, /^tasks\/submit-[a-f0-9]{32}$/);
+  assert.equal(
+    request.task.httpRequest.url,
+    "https://backend.example.com/internal/v1/executions/proposal%2F01/submit",
+  );
 });

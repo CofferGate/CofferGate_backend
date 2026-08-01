@@ -43,6 +43,18 @@ Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current`, 일�
 - BLOCK 응답은 `kmsRequested: false`로 무서명 경로를 증명합니다.
 - 브라우저는 Private Executor와 Cloud KMS에 직접 접근하지 않습니다.
 
+## Cloud Run deployment
+
+`cloudbuild.yaml`은 컨테이너를 Artifact Registry에 저장하고 Cloud Run에 배포합니다. 저장소와 서비스가 준비된 프로젝트에서 다음 명령을 실행합니다.
+
+```bash
+gcloud builds submit \
+  --region=asia-northeast3 \
+  --substitutions=_REGION=asia-northeast3,_ARTIFACT_REPOSITORY=coffergate,_SERVICE_NAME=coffergate-backend
+```
+
+런타임 환경 변수와 Secret Manager 연결은 Cloud Run 서비스 설정에서 관리하며 이미지와 `cloudbuild.yaml`에는 Secret 값을 저장하지 않습니다.
+
 ## HTTP endpoints
 
 - `GET /health/live`

@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { protos } from "@google-cloud/kms";
 import { loadConfig } from "../../src/config.js";
-import { createLiveReadinessProbes } from "../../src/services/create-live-readiness-service.js";
+import {
+  createLiveReadinessProbes,
+  isEd25519PublicKey,
+} from "../../src/services/create-live-readiness-service.js";
 import { SystemReadinessService } from "../../src/services/system-readiness.js";
 
 const config = loadConfig({
@@ -58,4 +62,17 @@ test("live readiness isolates failed dependencies", async () => {
   assert.equal(failures.length, 1);
   assert.equal(failures[0]?.serviceId, "cloud-kms");
   assert.match(String(failures[0]?.error), /unavailable/);
+});
+
+test("live readiness accepts numeric and string Ed25519 KMS algorithms", () => {
+  const ed25519 =
+    protos.google.cloud.kms.v1.CryptoKeyVersion.CryptoKeyVersionAlgorithm
+      .EC_SIGN_ED25519;
+  assert.equal(isEd25519PublicKey({ pem: "public-key", algorithm: ed25519 }), true);
+  assert.equal(
+    isEd25519PublicKey({ pem: "public-key", algorithm: "EC_SIGN_ED25519" }),
+    true,
+  );
+  assert.equal(isEd25519PublicKey({ pem: "public-key", algorithm: "RSA_SIGN_PSS_2048_SHA256" }), false);
+  assert.equal(isEd25519PublicKey({ algorithm: "EC_SIGN_ED25519" }), false);
 });

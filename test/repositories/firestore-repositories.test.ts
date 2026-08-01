@@ -43,6 +43,10 @@ const policy: Policy = {
 function createDatabase(
   collections: Record<string, Record<string, unknown>>,
 ): FirestoreDatabase {
+  const referenceRecords = new WeakMap<
+    object,
+    { records: Record<string, unknown>; documentId: string }
+  >();
   const createDocument = (
     documentId: string,
     records: Record<string, unknown>,
@@ -64,13 +68,30 @@ function createDatabase(
           };
         },
         doc(documentId) {
-          return {
+          const reference = {
+            id: documentId,
             async get() {
               return createDocument(documentId, records);
             },
           };
+          referenceRecords.set(reference, { records, documentId });
+          return reference;
         },
       };
+    },
+    async runTransaction(operation) {
+      return operation({
+        async get(reference) {
+          return reference.get();
+        },
+        set(reference, data) {
+          const target = referenceRecords.get(reference);
+          if (!target) {
+            throw new Error("Unknown document reference.");
+          }
+          target.records[target.documentId] = data;
+        },
+      });
     },
   };
 }
@@ -91,6 +112,41 @@ test("Firestore proposal repository rejects mismatched document IDs", async () =
   );
 
   await assert.rejects(() => repository.list(), /does not match proposalId/);
+});
+
+test("Firestore proposal repository atomically saves one policy evaluation", async () => {
+  const reviewedProposal: Proposal = { ...proposal, status: "AI_REVIEWED" };
+  const database = createDatabase({
+    proposals: { [proposal.proposalId]: reviewedProposal },
+  });
+  const repository = new FirestoreProposalRepository(database);
+  const evaluatedProposal: Proposal = {
+    ...reviewedProposal,
+    decision: "AUTO",
+    status: "POLICY_APPROVED",
+  };
+
+  assert.equal(
+    await repository.savePolicyEvaluation(evaluatedProposal, "AI_REVIEWED"),
+    "SAVED",
+  );
+  assert.deepEqual(await repository.findById(proposal.proposalId), evaluatedProposal);
+  assert.equal(
+    await repository.savePolicyEvaluation(evaluatedProposal, "AI_REVIEWED"),
+    "STATUS_CONFLICT",
+  );
+});
+
+test("Firestore proposal evaluation reports missing documents", async () => {
+  const repository = new FirestoreProposalRepository(createDatabase({}));
+
+  assert.equal(
+    await repository.savePolicyEvaluation(
+      { ...proposal, decision: "BLOCK", status: "BLOCKED" },
+      "AI_REVIEWED",
+    ),
+    "NOT_FOUND",
+  );
 });
 
 test("Firestore policy repository returns current policy or null", async () => {

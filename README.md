@@ -92,6 +92,19 @@ SERVICE_NAME='coffergate-backend' \
 ./scripts/verify-devnet-runtime.sh
 ```
 
+승인된 소액 Proposal 하나로 실제 Devnet 제출·확정·정산을 검증할 때만 명시적 실행 확인값과 USD 상한을 설정합니다.
+
+```bash
+PROJECT_ID='your-project-id' \
+REGION='asia-northeast3' \
+SERVICE_NAME='coffergate-backend' \
+PROPOSAL_ID='approved-proposal-id' \
+INTERNAL_TASK_TOKEN_SECRET='coffergate-internal-task-token' \
+MAX_E2E_AMOUNT_USD='1' \
+CONFIRM_DEVNET_EXECUTION='YES' \
+./scripts/verify-devnet-execution.sh
+```
+
 ### Scheduled proposal generation
 
 Cloud Run 배포와 내부 Token Secret 생성 후 다음 환경 변수를 설정해 Cloud Scheduler Job을 생성하거나 갱신합니다.

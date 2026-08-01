@@ -51,6 +51,7 @@ test("internal submission endpoint maps terminal and retryable outcomes", async 
     ["NOT_EXECUTABLE", 409, false],
     ["POLICY_REJECTED", 409, false],
     ["SIMULATION_FAILED", 422, false],
+    ["INTENT_EXPIRED", 409, false],
     ["CONFLICT", 409, true],
   ] as const) {
     const app = createInternalApp({ status });

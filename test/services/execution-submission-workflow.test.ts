@@ -46,6 +46,7 @@ function createWorkflow(overrides: Record<string, unknown> = {}) {
         return { status: "PREPARED" as const, intent };
       },
       findPrepared: async () => preparedIntent,
+      expire: async () => { events.push("expire"); return "EXPIRED" as const; },
       markSubmitted: async () => { events.push("persist"); return "SUBMITTED" as const; },
     },
     quoteProvider: { getExactInQuote: async () => ({
@@ -66,6 +67,7 @@ function createWorkflow(overrides: Record<string, unknown> = {}) {
       return { serializedTransaction: Buffer.from([2]), signature: Buffer.alloc(64, 1), kmsKeyVersion: "kms/key/1" };
     } },
     submitter: { sendTransaction: async () => { events.push("send"); return signature; } },
+    blockHeightProvider: { getBlockHeight: async () => 99 },
     balanceProvider: { getTokenBalance: async () => ({ amountAtomic: "5000000" }) },
     confirmationScheduler: { schedule: async () => { events.push("schedule"); } },
     outputTokenAccount: "usdc-account",
@@ -90,6 +92,7 @@ test("execution submission stops before sending on prepare conflicts", async () 
     submissionRepository: {
       prepare: async () => ({ status: "STATUS_CONFLICT" as const }),
       findPrepared: async () => null,
+      expire: async () => "STATUS_CONFLICT" as const,
       markSubmitted: async () => "STATUS_CONFLICT" as const,
     },
   });
@@ -114,6 +117,7 @@ test("execution submission resumes the exact prepared transaction", async () => 
     submissionRepository: {
       prepare: async () => ({ status: "STATUS_CONFLICT" as const }),
       findPrepared: async () => intent,
+      expire: async () => "EXPIRED" as const,
       markSubmitted: async () => "SUBMITTED" as const,
     },
   });
@@ -122,6 +126,32 @@ test("execution submission resumes the exact prepared transaction", async () => 
     status: "SUBMITTED", signature: base.signature,
   });
   assert.deepEqual(resumed.events, ["send", "schedule"]);
+});
+
+test("execution submission expires stale intents before network submission", async () => {
+  const base = createWorkflow();
+  const intent = {
+    proposalId: "proposal-1",
+    serializedTransactionBase64: Buffer.from([9]).toString("base64"),
+    transactionSignature: base.signature,
+    minContextSlot: 42,
+    lastValidBlockHeight: 100,
+    execution: { kmsRequested: true, kmsKeyVersion: "kms/key/1" },
+    preparedAt: "2026-08-01T06:00:30.000Z",
+  };
+  const expired = createWorkflow({
+    proposalRepository: { findById: async () => ({ ...proposal, status: "EXECUTING" }) },
+    submissionRepository: {
+      prepare: async () => ({ status: "STATUS_CONFLICT" as const }),
+      findPrepared: async () => intent,
+      expire: async () => "EXPIRED" as const,
+      markSubmitted: async () => "STATUS_CONFLICT" as const,
+    },
+    blockHeightProvider: { getBlockHeight: async () => 101 },
+  });
+
+  assert.deepEqual(await expired.workflow.execute("proposal-1"), { status: "INTENT_EXPIRED" });
+  assert.deepEqual(expired.events, []);
 });
 
 test("execution submission rejects ineligible and failed simulations", async () => {

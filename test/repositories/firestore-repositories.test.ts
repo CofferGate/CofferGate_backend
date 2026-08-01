@@ -197,6 +197,34 @@ test("Firestore execution submission atomically claims and submits proposals", a
   );
 });
 
+test("Firestore execution submission expires only its prepared intent", async () => {
+  const approved = { ...proposal, decision: "AUTO" as const };
+  const database = createDatabase({ proposals: { [proposal.proposalId]: approved } });
+  const repository = new FirestoreExecutionSubmissionRepository(database);
+  const intent = {
+    proposalId: proposal.proposalId,
+    serializedTransactionBase64: Buffer.from([1, 2, 3]).toString("base64"),
+    transactionSignature: "signature-expired",
+    minContextSlot: 42,
+    lastValidBlockHeight: 100,
+    execution: { kmsRequested: true, kmsKeyVersion: "kms/key/1" },
+    preparedAt: "2026-08-01T06:00:30.000Z",
+  };
+  await repository.prepare(proposal.proposalId, intent);
+
+  assert.equal(
+    await repository.expire(
+      proposal.proposalId,
+      intent.transactionSignature,
+      "2026-08-01T06:02:00.000Z",
+    ),
+    "EXPIRED",
+  );
+  const failed = await new FirestoreProposalRepository(database).findById(proposal.proposalId);
+  assert.equal(failed?.status, "FAILED");
+  assert.equal(failed?.execution?.failure?.code, "TRANSACTION_BLOCKHASH_EXPIRED");
+});
+
 test("Firestore proposal evaluation reports missing documents", async () => {
   const repository = new FirestoreProposalRepository(createDatabase({}));
 

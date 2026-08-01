@@ -15,7 +15,13 @@ export type ExecutionCompletionSaveResult =
   | "SIGNATURE_CONFLICT"
   | "IDEMPOTENCY_CONFLICT";
 
-export class FirestoreExecutionCompletionRepository {
+export interface ExecutionCompletionRepository {
+  complete(proposal: Proposal): Promise<ExecutionCompletionSaveResult>;
+}
+
+export class FirestoreExecutionCompletionRepository
+  implements ExecutionCompletionRepository
+{
   constructor(
     private readonly database: FirestoreDatabase,
     private readonly proposalsCollection = "proposals",

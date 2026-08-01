@@ -224,6 +224,9 @@ Secret Manager 값에 트레일링 줄바꿈이 들어가면 바이트 길이가
 **`/api/v1/dashboard`의 `balances`가 비어 있음**
 `OPERATIONS_WALLET_ADDRESS`/`USDC_MINT`/`USDC_TOKEN_ACCOUNT` 값과 Devnet RPC 연결을 확인하세요. 로그의 `dashboard.wallet_state.failed` 이벤트로 원인을 볼 수 있습니다.
 
+**Proposal의 `dataAsOf`가 전부 오래된 날짜(예: 2024년)로 찍힘**
+버그가 아닙니다. `dataAsOf`는 잔고 관찰 시각과 Jupiter 가격 관찰 시각 중 더 이른 쪽을 씁니다(`proposal-generation-context.ts`의 `earliestObservation`). 잔고 관찰 시각은 매번 실제 현재 시각을 쓰지만, Jupiter Price API가 응답에 담아주는 `createdAt` 필드(`jupiter-price.ts`)는 가격 자체와 무관하게 오래된 값일 수 있고, 이게 항상 더 이르기 때문에 `dataAsOf`로 뽑힙니다. 가격 조회와 AI 판단, KMS 서명은 매 사이클 실제로 새로 일어납니다 — `execution.attestationSignature`가 Proposal마다 다르고 `execution.attestedAt`이 Scheduler 주기(5분)와 정확히 맞는지 보면 확인할 수 있습니다.
+
 ---
 
 ## 5. 참고 자료

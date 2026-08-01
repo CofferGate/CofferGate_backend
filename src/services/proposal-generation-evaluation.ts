@@ -22,6 +22,7 @@ export interface ProposalPolicyEvaluation {
 export interface ProposalGenerationEvaluationDependencies {
   proposalGeneration: ProposalGeneration;
   proposalPolicyEvaluation: ProposalPolicyEvaluation;
+  demoAttestationScheduler?: { schedule(proposalId: string): Promise<unknown> };
 }
 
 export type ProposalGenerationEvaluationResult =
@@ -62,6 +63,14 @@ export class ProposalGenerationEvaluationService {
         context,
       );
     if (evaluationResult.status === "EVALUATED") {
+      if (
+        evaluationResult.proposal.status === "POLICY_APPROVED" &&
+        evaluationResult.proposal.action === "SWAP"
+      ) {
+        await this.dependencies.demoAttestationScheduler?.schedule(
+          evaluationResult.proposal.proposalId,
+        );
+      }
       return evaluationResult;
     }
     if (evaluationResult.status === "NOT_FOUND") {

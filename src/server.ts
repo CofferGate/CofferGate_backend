@@ -4,6 +4,7 @@ import { createRepositories } from "./repositories/create-repositories.js";
 import { TaskTokenAuthorizer } from "./security/task-request-authorizer.js";
 import { createProposalGenerationEvaluationService } from "./services/create-proposal-generation-evaluation.js";
 import { createLiveReadinessService } from "./services/create-live-readiness-service.js";
+import { createDemoAttestationService } from "./services/create-demo-attestation.js";
 
 const config = loadConfig();
 const repositories = createRepositories(config);
@@ -12,6 +13,10 @@ const internalDependencies =
     ? {
         trustedProposalGenerationService:
           createProposalGenerationEvaluationService(config, repositories),
+        demoAttestationService: createDemoAttestationService(
+          config,
+          repositories.proposalRepository,
+        ),
         taskRequestAuthorizer: new TaskTokenAuthorizer(
           config.INTERNAL_TASK_TOKEN,
         ),

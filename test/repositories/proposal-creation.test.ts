@@ -36,6 +36,30 @@ test("in-memory proposal creation rejects ID conflicts", async () => {
   );
 });
 
+test("in-memory proposal creation remains idempotent after policy evaluation", async () => {
+  const repository = new InMemoryProposalRepository([proposal]);
+  const evaluatedProposal: Proposal = {
+    ...proposal,
+    decision: "BLOCK",
+    status: "BLOCKED",
+    ruleChecks: [
+      {
+        code: "EXPIRED",
+        label: "Proposal expiry",
+        result: "FAIL",
+        message: "Proposal expired before evaluation.",
+      },
+    ],
+  };
+
+  assert.equal(
+    await repository.savePolicyEvaluation(evaluatedProposal, "AI_REVIEWED"),
+    "SAVED",
+  );
+  assert.equal(await repository.create(proposal), "ALREADY_EXISTS");
+  assert.deepEqual(await repository.findById(proposal.proposalId), evaluatedProposal);
+});
+
 test("proposal creation rejects precomputed policy and execution state", async () => {
   const repository = new InMemoryProposalRepository();
   await assert.rejects(() =>

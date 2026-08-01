@@ -95,3 +95,4 @@ export type Proposal = z.infer<typeof proposalSchema>;
 export type EvidenceReference = z.infer<typeof evidenceReferenceSchema>;
 export type ExecutionSummary = z.infer<typeof executionSummarySchema>;
 export type RuleCheck = z.infer<typeof ruleCheckSchema>;
+export type SimulationResult = z.infer<typeof simulationResultSchema>;

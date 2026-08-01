@@ -21,11 +21,11 @@ import { SystemReadinessService } from "./services/system-readiness.js";
 import { DashboardSnapshotService } from "./services/dashboard-snapshot.js";
 import type { ExecutionConfirmationPoller } from "./services/execution-confirmation-poller.js";
 import type { TaskRequestAuthorizer } from "./security/task-request-authorizer.js";
-import {
-  vertexProposalGenerationInputSchema,
-  type VertexProposalGenerationInput,
-} from "./providers/vertex-proposal.js";
-import type { ProposalGenerationEvaluationService } from "./services/proposal-generation-evaluation.js";
+import type { TrustedProposalGenerationService } from "./services/trusted-proposal-generation.js";
+
+const internalProposalGenerationRequestSchema = z.object({
+  proposalId: z.string().min(1),
+});
 
 type ApiConfig = Pick<
   AppConfig,
@@ -41,7 +41,7 @@ export interface AppDependencies {
   policyRepository?: PolicyRepository;
   dashboardSnapshotService?: DashboardSnapshotService;
   executionConfirmationPoller?: ExecutionConfirmationPoller;
-  proposalGenerationEvaluationService?: ProposalGenerationEvaluationService;
+  trustedProposalGenerationService?: TrustedProposalGenerationService;
   taskRequestAuthorizer?: TaskRequestAuthorizer;
 }
 
@@ -172,7 +172,7 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
 
   if (
     (dependencies.executionConfirmationPoller ||
-      dependencies.proposalGenerationEvaluationService) &&
+      dependencies.trustedProposalGenerationService) &&
     !dependencies.taskRequestAuthorizer
   ) {
     throw new Error("Task request authorizer is required for internal routes.");
@@ -212,10 +212,10 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
     );
   }
 
-  if (dependencies.proposalGenerationEvaluationService) {
-    const proposalGenerationEvaluationService =
-      dependencies.proposalGenerationEvaluationService;
-    app.post<{ Body: VertexProposalGenerationInput }>(
+  if (dependencies.trustedProposalGenerationService) {
+    const trustedProposalGenerationService =
+      dependencies.trustedProposalGenerationService;
+    app.post<{ Body: { proposalId: string } }>(
       "/internal/v1/proposals/generate",
       async (request, reply) => {
         const taskToken = request.headers["x-coffergate-task-token"];
@@ -224,7 +224,7 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
         )) {
           return reply.status(401).send({ status: "UNAUTHORIZED", retryable: false });
         }
-        const parsedRequest = vertexProposalGenerationInputSchema.safeParse(
+        const parsedRequest = internalProposalGenerationRequestSchema.safeParse(
           request.body,
         );
         if (!parsedRequest.success) {
@@ -234,9 +234,12 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
           });
         }
 
-        const result = await proposalGenerationEvaluationService.generateAndEvaluate(
-          parsedRequest.data,
+        const result = await trustedProposalGenerationService.generate(
+          parsedRequest.data.proposalId,
         );
+        if (result.status === "POLICY_NOT_CONFIGURED") {
+          return reply.status(409).send({ ...result, retryable: false });
+        }
         if (result.status === "PERSISTENCE_INCONSISTENCY") {
           return reply
             .header("retry-after", "5")

@@ -9,24 +9,13 @@ const config = {
   OPERATIONS_WALLET_ADDRESS: "unconfigured",
 } as const;
 const token = "a".repeat(32);
-const body = {
-  proposalId: "proposal_01",
-  policyVersion: "policy-2026.08.1",
-  dataAsOf: "2026-08-01T06:00:00.000Z",
-  expiresAt: "2026-08-01T06:05:00.000Z",
-  solBalance: "1.25",
-  usdcBalance: "10.00",
-  targetUsdcBalance: "15.00",
-  solPriceUsd: 200,
-  assetMints: { SOL: "sol-mint", USDC: "usdc-mint" },
-  evidenceRefs: [],
-};
+const body = { proposalId: "proposal_01" };
 
 function createInternalApp(result: unknown) {
   return createApp({
     config,
-    proposalGenerationEvaluationService: {
-      async generateAndEvaluate() {
+    trustedProposalGenerationService: {
+      async generate() {
         return result;
       },
     } as never,
@@ -53,7 +42,7 @@ test("internal proposal generation rejects invalid inputs", async () => {
     method: "POST",
     url: "/internal/v1/proposals/generate",
     headers: { "x-coffergate-task-token": token },
-    payload: { ...body, solBalance: "invalid" },
+    payload: { proposalId: "" },
   });
 
   assert.equal(response.statusCode, 400);
@@ -100,6 +89,20 @@ test("internal proposal generation marks transient failures retryable", async ()
 
 test("internal proposal generation rejects permanent ID conflicts", async () => {
   const app = createInternalApp({ status: "ID_CONFLICT" });
+  const response = await app.inject({
+    method: "POST",
+    url: "/internal/v1/proposals/generate",
+    headers: { "x-coffergate-task-token": token },
+    payload: body,
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().retryable, false);
+  await app.close();
+});
+
+test("internal proposal generation rejects an unconfigured policy", async () => {
+  const app = createInternalApp({ status: "POLICY_NOT_CONFIGURED" });
   const response = await app.inject({
     method: "POST",
     url: "/internal/v1/proposals/generate",

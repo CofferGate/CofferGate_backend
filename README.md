@@ -24,6 +24,12 @@ CLOUD_TASKS_TARGET_BASE_URL='https://your-cloud-run-service.run.app'
 CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL='tasks@your-project.iam.gserviceaccount.com'
 VERTEX_AI_LOCATION='us-central1'
 VERTEX_AI_MODEL='gemini-2.5-flash'
+SOL_MINT='So11111111111111111111111111111111111111112'
+USDC_MINT='network-usdc-mint'
+USDC_TOKEN_ACCOUNT='operations-wallet-usdc-token-account'
+TARGET_USDC_BALANCE='20'
+PROPOSAL_TTL_SECONDS='300'
+JUPITER_API_KEY='secret-manager-value'
 ```
 
 Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current`, 일일 사용량은 `dailyUsage/{YYYY-MM-DD}` 문서에서 조회합니다. 컬렉션명과 현재 Policy 문서 ID는 환경 변수로 변경할 수 있습니다.

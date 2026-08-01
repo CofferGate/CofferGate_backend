@@ -11,6 +11,16 @@ npm test
 npm run dev
 ```
 
+Firestore를 사용할 때는 Application Default Credentials를 구성하고 다음 환경 변수를 설정합니다.
+
+```bash
+REPOSITORY_MODE=firestore
+GOOGLE_CLOUD_PROJECT=your-project-id
+FIRESTORE_DATABASE_ID='(default)'
+```
+
+Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current` 문서에서 조회합니다. 컬렉션명과 현재 Policy 문서 ID는 환경 변수로 변경할 수 있습니다.
+
 ## Contract policy
 
 - 외부 API는 프론트엔드 v5 Zod 계약과 동일한 camelCase DTO를 반환합니다.

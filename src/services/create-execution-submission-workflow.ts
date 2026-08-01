@@ -9,6 +9,7 @@ import { FirestoreExecutionSubmissionRepository } from "../repositories/executio
 import type { AppRepositories } from "../repositories/create-repositories.js";
 import { ExecutionSimulationService } from "./execution-simulation.js";
 import { ExecutionSubmissionWorkflow } from "./execution-submission-workflow.js";
+import { SolanaProgramAllowlistValidator } from "./solana-program-allowlist.js";
 
 export function createExecutionSubmissionWorkflow(
   config: AppConfig,
@@ -68,6 +69,7 @@ export function createExecutionSubmissionWorkflow(
       internalTaskToken: internalToken,
       scheduleDelaySeconds: config.CLOUD_TASKS_SCHEDULE_DELAY_SECONDS,
     }),
+    programAllowlistValidator: new SolanaProgramAllowlistValidator(),
     outputTokenAccount,
   });
 }

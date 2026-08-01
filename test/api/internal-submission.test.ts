@@ -50,6 +50,7 @@ test("internal submission endpoint maps terminal and retryable outcomes", async 
     ["NOT_FOUND", 404, false],
     ["NOT_EXECUTABLE", 409, false],
     ["POLICY_REJECTED", 409, false],
+    ["PROGRAM_REJECTED", 409, false],
     ["SIMULATION_FAILED", 422, false],
     ["INTENT_EXPIRED", 409, false],
     ["CONFLICT", 409, true],

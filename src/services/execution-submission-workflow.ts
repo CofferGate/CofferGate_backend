@@ -15,10 +15,11 @@ interface TransactionSubmitter { sendTransaction(transaction: Buffer, options?: 
 interface BlockHeightProvider { getBlockHeight(minContextSlot?: number): Promise<number> }
 interface BalanceProvider { getTokenBalance(account: string): Promise<{ amountAtomic: string }> }
 interface ConfirmationScheduler { schedule(proposalId: string): Promise<unknown> }
+interface ProgramAllowlistValidator { validate(transaction: Buffer, allowedPrograms: readonly string[]): unknown }
 
 export type ExecutionSubmissionResult =
   | { status: "SUBMITTED"; signature: string }
-  | { status: "NOT_FOUND" | "NOT_EXECUTABLE" | "POLICY_REJECTED" | "SIMULATION_FAILED" | "INTENT_EXPIRED" | "CONFLICT" };
+  | { status: "NOT_FOUND" | "NOT_EXECUTABLE" | "POLICY_REJECTED" | "PROGRAM_REJECTED" | "SIMULATION_FAILED" | "INTENT_EXPIRED" | "CONFLICT" };
 
 export interface ExecutionSubmissionWorkflowDependencies {
   proposalRepository: ProposalRepository;
@@ -32,6 +33,7 @@ export interface ExecutionSubmissionWorkflowDependencies {
   blockHeightProvider: BlockHeightProvider;
   balanceProvider: BalanceProvider;
   confirmationScheduler: ConfirmationScheduler;
+  programAllowlistValidator: ProgramAllowlistValidator;
   outputTokenAccount: string;
   now?: () => Date;
 }
@@ -68,6 +70,14 @@ export class ExecutionSubmissionWorkflow {
       return { status: "POLICY_REJECTED" };
     }
     const unsigned = await this.dependencies.swapProvider.createUnsignedTransaction(quote);
+    try {
+      this.dependencies.programAllowlistValidator.validate(
+        unsigned.serializedTransaction,
+        policy.allowedPrograms,
+      );
+    } catch {
+      return { status: "PROGRAM_REJECTED" };
+    }
     const simulation = await this.dependencies.simulationService.simulate(
       unsigned.serializedTransaction,
       quote.contextSlot,

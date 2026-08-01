@@ -30,6 +30,10 @@ USDC_TOKEN_ACCOUNT='operations-wallet-usdc-token-account'
 TARGET_USDC_BALANCE='20'
 PROPOSAL_TTL_SECONDS='300'
 JUPITER_API_KEY='secret-manager-value'
+CLOUD_KMS_KEY_VERSION='projects/project/locations/location/keyRings/ring/cryptoKeys/key/cryptoKeyVersions/1'
+MAX_PRIORITY_FEE_LAMPORTS='1000000'
+SIMULATION_COMPUTE_MARGIN_BPS='2000'
+MAX_COMPUTE_UNITS='1400000'
 ```
 
 Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current`, 일일 사용량은 `dailyUsage/{YYYY-MM-DD}` 문서에서 조회합니다. 컬렉션명과 현재 Policy 문서 ID는 환경 변수로 변경할 수 있습니다.
@@ -81,6 +85,7 @@ SCHEDULER_TIME_ZONE='Etc/UTC' \
 - `GET /api/v1/proposals/:proposalId`
 - `GET /api/v1/policy/current`
 - `GET /api/v1/dashboard`
+- `POST /internal/v1/executions/:proposalId/submit` (Firestore mode, Cloud Run OIDC + 내부 Token 인증)
 - `POST /internal/v1/executions/:proposalId/confirm` (Firestore mode, Cloud Run OIDC + 내부 Token 인증)
 - `POST /internal/v1/proposals/generate` (Firestore mode, Cloud Run OIDC + 내부 Token 인증)
 - `POST /internal/v1/proposals/generate/scheduled` (Cloud Scheduler 전용, 예약 시각 기반 멱등 ID)

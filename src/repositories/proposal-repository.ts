@@ -16,6 +16,13 @@ export interface ProposalRepository {
   ): Promise<ProposalEvaluationSaveResult>;
 }
 
+export interface DemoAttestationRepository {
+  findById(proposalId: string): Promise<Proposal | null>;
+  saveDemoAttestation(
+    proposal: Proposal,
+  ): Promise<ProposalDemoAttestationSaveResult>;
+}
+
 export type ProposalCreateResult =
   | "CREATED"
   | "ALREADY_EXISTS"
@@ -23,6 +30,12 @@ export type ProposalCreateResult =
 
 export type ProposalEvaluationSaveResult =
   | "SAVED"
+  | "NOT_FOUND"
+  | "STATUS_CONFLICT";
+
+export type ProposalDemoAttestationSaveResult =
+  | "SAVED"
+  | "ALREADY_SAVED"
   | "NOT_FOUND"
   | "STATUS_CONFLICT";
 
@@ -128,6 +141,30 @@ export class FirestoreProposalRepository implements ProposalRepository {
     });
   }
 
+  async saveDemoAttestation(
+    proposal: Proposal,
+  ): Promise<ProposalDemoAttestationSaveResult> {
+    const validatedProposal = validateDemoAttestation(proposal);
+    const reference = this.database
+      .collection(this.collectionName)
+      .doc(validatedProposal.proposalId);
+
+    return this.database.runTransaction(async (transaction) => {
+      const document = await transaction.get(reference);
+      if (!document.exists) return "NOT_FOUND";
+      const current = this.parseDocument(document.id, document.data());
+      if (current.status === "SIMULATED") {
+        return current.execution?.attestationSignature ===
+          validatedProposal.execution?.attestationSignature
+          ? "ALREADY_SAVED"
+          : "STATUS_CONFLICT";
+      }
+      if (current.status !== "POLICY_APPROVED") return "STATUS_CONFLICT";
+      transaction.set(reference, validatedProposal);
+      return "SAVED";
+    });
+  }
+
   private parseDocument(documentId: string, data: unknown): Proposal {
     const proposal = proposalSchema.parse(data);
     if (proposal.proposalId !== documentId) {
@@ -186,4 +223,39 @@ export class InMemoryProposalRepository implements ProposalRepository {
     this.proposals.set(validatedProposal.proposalId, validatedProposal);
     return "SAVED";
   }
+
+  async saveDemoAttestation(
+    proposal: Proposal,
+  ): Promise<ProposalDemoAttestationSaveResult> {
+    const validatedProposal = validateDemoAttestation(proposal);
+    const current = this.proposals.get(validatedProposal.proposalId);
+    if (!current) return "NOT_FOUND";
+    if (current.status === "SIMULATED") {
+      return current.execution?.attestationSignature ===
+        validatedProposal.execution?.attestationSignature
+        ? "ALREADY_SAVED"
+        : "STATUS_CONFLICT";
+    }
+    if (current.status !== "POLICY_APPROVED") return "STATUS_CONFLICT";
+    this.proposals.set(validatedProposal.proposalId, validatedProposal);
+    return "SAVED";
+  }
+}
+
+function validateDemoAttestation(proposal: Proposal): Proposal {
+  const validated = proposalSchema.parse(proposal);
+  if (
+    validated.status !== "SIMULATED" ||
+    validated.decision !== "AUTO" ||
+    validated.execution?.mode !== "demo" ||
+    validated.execution.kmsRequested !== true ||
+    !validated.execution.kmsKeyVersion ||
+    !validated.execution.attestationSignature ||
+    !validated.execution.attestedAt ||
+    validated.execution.transactionSignature ||
+    validated.execution.submittedAt
+  ) {
+    throw new Error("Proposal does not contain a valid demo attestation.");
+  }
+  return validated;
 }

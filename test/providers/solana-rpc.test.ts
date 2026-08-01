@@ -279,3 +279,18 @@ test("Solana RPC provider rejects unsafe transaction submissions", async () => {
   await assert.rejects(() => provider.sendTransaction(signedTransaction, { maxRetries: -1 }));
   await assert.rejects(() => provider.sendTransaction(signedTransaction, { minContextSlot: -1 }));
 });
+
+test("Solana RPC provider returns confirmed block height", async () => {
+  const mock = createFetch([{ jsonrpc: "2.0", result: 324307200, id: 1 }]);
+  const provider = new SolanaRpcProvider({
+    endpoint: "https://api.devnet.solana.com",
+    fetch: mock.fetch,
+  });
+
+  assert.equal(await provider.getBlockHeight(324307186), 324307200);
+  assert.deepEqual(mock.requests[0], {
+    jsonrpc: "2.0", id: 1, method: "getBlockHeight",
+    params: [{ commitment: "confirmed", minContextSlot: 324307186 }],
+  });
+  await assert.rejects(() => provider.getBlockHeight(-1));
+});

@@ -76,6 +76,12 @@ const sendTransactionResponseSchema = z.object({
   id: z.number(),
 });
 
+const blockHeightResponseSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  result: z.number().int().nonnegative().safe(),
+  id: z.number(),
+});
+
 export type SolanaSignatureStatus =
   | { status: "NOT_FOUND" }
   | { status: "PENDING"; slot: number }
@@ -284,6 +290,21 @@ export class SolanaRpcProvider {
       throw new SolanaRpcError("Solana RPC returned a mismatched transaction signature.");
     }
     return response.result;
+  }
+
+  async getBlockHeight(minContextSlot?: number): Promise<number> {
+    if (
+      minContextSlot !== undefined &&
+      (!Number.isSafeInteger(minContextSlot) || minContextSlot < 0)
+    ) {
+      throw new SolanaRpcError("Block height context slot must be a nonnegative safe integer.");
+    }
+    return blockHeightResponseSchema.parse(
+      await this.request("getBlockHeight", [{
+        commitment: "confirmed",
+        ...(minContextSlot === undefined ? {} : { minContextSlot }),
+      }]),
+    ).result;
   }
 
   private async request(method: string, params: unknown[]): Promise<unknown> {

@@ -17,12 +17,13 @@ export type ExecutionPrepareResult =
   | { status: "PREPARED" | "ALREADY_PREPARED"; intent: ExecutionIntent }
   | { status: "NOT_FOUND" | "STATUS_CONFLICT" };
 export type ExecutionSubmissionSaveResult =
-  | "SUBMITTED" | "ALREADY_SUBMITTED" | "NOT_FOUND"
+  | "SUBMITTED" | "ALREADY_SUBMITTED" | "EXPIRED" | "NOT_FOUND"
   | "STATUS_CONFLICT" | "SIGNATURE_CONFLICT";
 
 export interface ExecutionSubmissionRepository {
   prepare(proposalId: string, intent: ExecutionIntent): Promise<ExecutionPrepareResult>;
   findPrepared(proposalId: string): Promise<ExecutionIntent | null>;
+  expire(proposalId: string, transactionSignature: string, observedAt: string): Promise<ExecutionSubmissionSaveResult>;
   markSubmitted(proposalId: string, execution: ExecutionSummary): Promise<ExecutionSubmissionSaveResult>;
 }
 
@@ -82,6 +83,39 @@ export class FirestoreExecutionSubmissionRepository implements ExecutionSubmissi
         ...proposal, status: "SUBMITTED", execution,
       }));
       return "SUBMITTED";
+    });
+  }
+
+  async expire(
+    proposalId: string,
+    transactionSignature: string,
+    observedAt: string,
+  ): Promise<ExecutionSubmissionSaveResult> {
+    const proposalReference = this.database.collection(this.proposalsCollection).doc(proposalId);
+    const intentReference = this.database.collection(this.intentsCollection).doc(proposalId);
+    return this.database.runTransaction(async (transaction) => {
+      const proposalDocument = await transaction.get(proposalReference);
+      if (!proposalDocument.exists) return "NOT_FOUND";
+      const proposal = this.parseProposal(proposalDocument.id, proposalDocument.data());
+      if (proposal.status !== "EXECUTING") return "STATUS_CONFLICT";
+      const intentDocument = await transaction.get(intentReference);
+      if (!intentDocument.exists) return "STATUS_CONFLICT";
+      const intent = this.parseIntent(intentDocument.id, intentDocument.data());
+      if (intent.transactionSignature !== transactionSignature) return "SIGNATURE_CONFLICT";
+      transaction.set(proposalReference, proposalSchema.parse({
+        ...proposal,
+        status: "FAILED",
+        execution: {
+          ...intent.execution,
+          transactionSignature,
+          failure: {
+            code: "TRANSACTION_BLOCKHASH_EXPIRED",
+            message: "The prepared transaction expired before submission.",
+            observedAt,
+          },
+        },
+      }));
+      return "EXPIRED";
     });
   }
 

@@ -1,80 +1,99 @@
-import { proposalSchema, type ExecutionSummary, type Proposal } from "../contracts/index.js";
+import { z } from "zod";
+import { executionSummarySchema, proposalSchema, type ExecutionSummary, type Proposal } from "../contracts/index.js";
 import type { FirestoreDatabase } from "../infrastructure/firestore.js";
 
-export type ExecutionClaimResult = "CLAIMED" | "NOT_FOUND" | "STATUS_CONFLICT";
+const executionIntentSchema = z.object({
+  proposalId: z.string().min(1),
+  serializedTransactionBase64: z.string().min(1),
+  transactionSignature: z.string().min(1),
+  minContextSlot: z.number().int().nonnegative(),
+  lastValidBlockHeight: z.number().int().positive(),
+  execution: executionSummarySchema,
+  preparedAt: z.string().datetime(),
+});
+
+export type ExecutionIntent = z.infer<typeof executionIntentSchema>;
+export type ExecutionPrepareResult =
+  | { status: "PREPARED" | "ALREADY_PREPARED"; intent: ExecutionIntent }
+  | { status: "NOT_FOUND" | "STATUS_CONFLICT" };
 export type ExecutionSubmissionSaveResult =
-  | "SUBMITTED"
-  | "ALREADY_SUBMITTED"
-  | "NOT_FOUND"
-  | "STATUS_CONFLICT"
-  | "SIGNATURE_CONFLICT";
+  | "SUBMITTED" | "ALREADY_SUBMITTED" | "NOT_FOUND"
+  | "STATUS_CONFLICT" | "SIGNATURE_CONFLICT";
 
 export interface ExecutionSubmissionRepository {
-  claim(proposalId: string, execution: ExecutionSummary): Promise<ExecutionClaimResult>;
-  markSubmitted(
-    proposalId: string,
-    execution: ExecutionSummary,
-  ): Promise<ExecutionSubmissionSaveResult>;
+  prepare(proposalId: string, intent: ExecutionIntent): Promise<ExecutionPrepareResult>;
+  findPrepared(proposalId: string): Promise<ExecutionIntent | null>;
+  markSubmitted(proposalId: string, execution: ExecutionSummary): Promise<ExecutionSubmissionSaveResult>;
 }
 
-export class FirestoreExecutionSubmissionRepository
-  implements ExecutionSubmissionRepository
-{
+export class FirestoreExecutionSubmissionRepository implements ExecutionSubmissionRepository {
   constructor(
     private readonly database: FirestoreDatabase,
-    private readonly collectionName = "proposals",
+    private readonly proposalsCollection = "proposals",
+    private readonly intentsCollection = "executionIntents",
   ) {}
 
-  async claim(
-    proposalId: string,
-    execution: ExecutionSummary,
-  ): Promise<ExecutionClaimResult> {
-    const reference = this.database.collection(this.collectionName).doc(proposalId);
+  async prepare(proposalId: string, value: ExecutionIntent): Promise<ExecutionPrepareResult> {
+    const intent = executionIntentSchema.parse(value);
+    if (intent.proposalId !== proposalId) throw new Error("Execution intent proposal ID does not match.");
+    const proposalReference = this.database.collection(this.proposalsCollection).doc(proposalId);
+    const intentReference = this.database.collection(this.intentsCollection).doc(proposalId);
     return this.database.runTransaction(async (transaction) => {
-      const document = await transaction.get(reference);
-      if (!document.exists) return "NOT_FOUND";
-      const proposal = this.parseDocument(document.id, document.data());
-      if (proposal.status !== "POLICY_APPROVED" || proposal.decision !== "AUTO") {
-        return "STATUS_CONFLICT";
+      const proposalDocument = await transaction.get(proposalReference);
+      if (!proposalDocument.exists) return { status: "NOT_FOUND" };
+      const proposal = this.parseProposal(proposalDocument.id, proposalDocument.data());
+      const intentDocument = await transaction.get(intentReference);
+      if (proposal.status === "EXECUTING" && intentDocument.exists) {
+        return { status: "ALREADY_PREPARED", intent: this.parseIntent(intentDocument.id, intentDocument.data()) };
       }
-      transaction.set(reference, proposalSchema.parse({
-        ...proposal,
-        status: "EXECUTING",
-        execution,
+      if (proposal.status !== "POLICY_APPROVED" || proposal.decision !== "AUTO" || intentDocument.exists) {
+        return { status: "STATUS_CONFLICT" };
+      }
+      transaction.set(proposalReference, proposalSchema.parse({
+        ...proposal, status: "EXECUTING", execution: intent.execution,
       }));
-      return "CLAIMED";
+      transaction.set(intentReference, intent);
+      return { status: "PREPARED", intent };
     });
   }
 
-  async markSubmitted(
-    proposalId: string,
-    execution: ExecutionSummary,
-  ): Promise<ExecutionSubmissionSaveResult> {
-    const reference = this.database.collection(this.collectionName).doc(proposalId);
+  async findPrepared(proposalId: string): Promise<ExecutionIntent | null> {
+    const document = await this.database.collection(this.intentsCollection).doc(proposalId).get();
+    return document.exists ? this.parseIntent(document.id, document.data()) : null;
+  }
+
+  async markSubmitted(proposalId: string, execution: ExecutionSummary): Promise<ExecutionSubmissionSaveResult> {
+    const proposalReference = this.database.collection(this.proposalsCollection).doc(proposalId);
+    const intentReference = this.database.collection(this.intentsCollection).doc(proposalId);
     return this.database.runTransaction(async (transaction) => {
-      const document = await transaction.get(reference);
-      if (!document.exists) return "NOT_FOUND";
-      const proposal = this.parseDocument(document.id, document.data());
+      const proposalDocument = await transaction.get(proposalReference);
+      if (!proposalDocument.exists) return "NOT_FOUND";
+      const proposal = this.parseProposal(proposalDocument.id, proposalDocument.data());
       if (proposal.status === "SUBMITTED") {
         return proposal.execution?.transactionSignature === execution.transactionSignature
-          ? "ALREADY_SUBMITTED"
-          : "SIGNATURE_CONFLICT";
+          ? "ALREADY_SUBMITTED" : "SIGNATURE_CONFLICT";
       }
       if (proposal.status !== "EXECUTING") return "STATUS_CONFLICT";
-      transaction.set(reference, proposalSchema.parse({
-        ...proposal,
-        status: "SUBMITTED",
-        execution,
+      const intentDocument = await transaction.get(intentReference);
+      if (!intentDocument.exists) return "STATUS_CONFLICT";
+      const intent = this.parseIntent(intentDocument.id, intentDocument.data());
+      if (intent.transactionSignature !== execution.transactionSignature) return "SIGNATURE_CONFLICT";
+      transaction.set(proposalReference, proposalSchema.parse({
+        ...proposal, status: "SUBMITTED", execution,
       }));
       return "SUBMITTED";
     });
   }
 
-  private parseDocument(documentId: string, data: unknown): Proposal {
+  private parseProposal(documentId: string, data: unknown): Proposal {
     const proposal = proposalSchema.parse(data);
-    if (proposal.proposalId !== documentId) {
-      throw new Error(`Proposal document ID ${documentId} does not match proposalId ${proposal.proposalId}.`);
-    }
+    if (proposal.proposalId !== documentId) throw new Error(`Proposal document ID ${documentId} does not match proposalId ${proposal.proposalId}.`);
     return proposal;
+  }
+
+  private parseIntent(documentId: string, data: unknown): ExecutionIntent {
+    const intent = executionIntentSchema.parse(data);
+    if (intent.proposalId !== documentId) throw new Error(`Execution intent document ID ${documentId} does not match proposalId ${intent.proposalId}.`);
+    return intent;
   }
 }

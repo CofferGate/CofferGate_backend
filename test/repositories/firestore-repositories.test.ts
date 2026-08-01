@@ -167,6 +167,15 @@ test("Firestore execution submission atomically claims and submits proposals", a
   const database = createDatabase({ proposals: { [proposal.proposalId]: approved } });
   const repository = new FirestoreExecutionSubmissionRepository(database);
   const prepared = { kmsRequested: true, routeLabel: "Meteora" };
+  const intent = {
+    proposalId: proposal.proposalId,
+    serializedTransactionBase64: Buffer.from([1, 2, 3]).toString("base64"),
+    transactionSignature: "signature-1",
+    minContextSlot: 42,
+    lastValidBlockHeight: 100,
+    execution: prepared,
+    preparedAt: "2026-08-01T06:00:30.000Z",
+  };
   const submitted = {
     ...prepared,
     kmsKeyVersion: "projects/p/locations/l/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
@@ -174,8 +183,9 @@ test("Firestore execution submission atomically claims and submits proposals", a
     submittedAt: "2026-08-01T06:01:00.000Z",
   };
 
-  assert.equal(await repository.claim(proposal.proposalId, prepared), "CLAIMED");
-  assert.equal(await repository.claim(proposal.proposalId, prepared), "STATUS_CONFLICT");
+  assert.equal((await repository.prepare(proposal.proposalId, intent)).status, "PREPARED");
+  assert.equal((await repository.prepare(proposal.proposalId, { ...intent, transactionSignature: "other" })).status, "ALREADY_PREPARED");
+  assert.deepEqual(await repository.findPrepared(proposal.proposalId), intent);
   assert.equal(await repository.markSubmitted(proposal.proposalId, submitted), "SUBMITTED");
   assert.equal(
     await repository.markSubmitted(proposal.proposalId, submitted),

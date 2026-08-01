@@ -18,6 +18,10 @@ REPOSITORY_MODE=firestore
 GOOGLE_CLOUD_PROJECT=your-project-id
 FIRESTORE_DATABASE_ID='(default)'
 INTERNAL_TASK_TOKEN='at-least-32-characters-from-secret-manager'
+CLOUD_TASKS_LOCATION='asia-northeast3'
+CLOUD_TASKS_QUEUE='confirmation'
+CLOUD_TASKS_TARGET_BASE_URL='https://your-cloud-run-service.run.app'
+CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL='tasks@your-project.iam.gserviceaccount.com'
 ```
 
 Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current`, 일일 사용량은 `dailyUsage/{YYYY-MM-DD}` 문서에서 조회합니다. 컬렉션명과 현재 Policy 문서 ID는 환경 변수로 변경할 수 있습니다.
@@ -39,4 +43,4 @@ Proposal은 `proposals/{proposalId}`, 현재 Policy는 `policies/current`, 일�
 - `GET /api/v1/proposals/:proposalId`
 - `GET /api/v1/policy/current`
 - `GET /api/v1/dashboard`
-- `POST /internal/v1/executions/:proposalId/confirm` (Firestore mode, Bearer 인증)
+- `POST /internal/v1/executions/:proposalId/confirm` (Firestore mode, Cloud Run OIDC + 내부 Token 인증)

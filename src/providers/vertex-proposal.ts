@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
   evidenceReferenceSchema,
   proposalSchema,
-  type EvidenceReference,
   type Proposal,
 } from "../contracts/index.js";
 
@@ -34,18 +33,22 @@ const vertexProposalDecisionSchema = z
     }
   });
 
-export interface VertexProposalGenerationInput {
-  proposalId: string;
-  policyVersion: string;
-  dataAsOf: string;
-  expiresAt: string;
-  solBalance: string;
-  usdcBalance: string;
-  targetUsdcBalance: string;
-  solPriceUsd: number;
-  assetMints: Record<"SOL" | "USDC", string>;
-  evidenceRefs: EvidenceReference[];
-}
+export const vertexProposalGenerationInputSchema = z.object({
+  proposalId: z.string().min(1),
+  policyVersion: z.string().min(1),
+  dataAsOf: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  solBalance: z.string().regex(/^\d+(?:\.\d+)?$/),
+  usdcBalance: z.string().regex(/^\d+(?:\.\d+)?$/),
+  targetUsdcBalance: z.string().regex(/^\d+(?:\.\d+)?$/),
+  solPriceUsd: z.number().positive(),
+  assetMints: z.object({ SOL: z.string().min(1), USDC: z.string().min(1) }),
+  evidenceRefs: z.array(evidenceReferenceSchema),
+});
+
+export type VertexProposalGenerationInput = z.infer<
+  typeof vertexProposalGenerationInputSchema
+>;
 
 interface VertexClient {
   models: {
@@ -74,10 +77,10 @@ export class VertexProposalProvider {
   }
 
   async generate(input: VertexProposalGenerationInput): Promise<Proposal> {
-    const evidenceRefs = z.array(evidenceReferenceSchema).parse(input.evidenceRefs);
+    const validatedInput = vertexProposalGenerationInputSchema.parse(input);
     const response = await this.client.models.generateContent({
       model: this.options.model,
-      contents: this.buildPrompt(input),
+      contents: this.buildPrompt(validatedInput),
       config: {
         temperature: 0,
         seed: 0,
@@ -106,22 +109,22 @@ export class VertexProposalProvider {
         ? {
             inputSymbol: decision.inputSymbol,
             outputSymbol: decision.outputSymbol,
-            inputMint: input.assetMints[decision.inputSymbol!],
-            outputMint: input.assetMints[decision.outputSymbol!],
+            inputMint: validatedInput.assetMints[decision.inputSymbol!],
+            outputMint: validatedInput.assetMints[decision.outputSymbol!],
             amountUsd: decision.amountUsd,
           }
         : {};
 
     return proposalSchema.parse({
-      proposalId: input.proposalId,
+      proposalId: validatedInput.proposalId,
       action: decision.action,
       ...swapFields,
       rationale: decision.rationale,
       confidence: decision.confidence,
-      evidenceRefs,
-      dataAsOf: input.dataAsOf,
-      expiresAt: input.expiresAt,
-      policyVersion: input.policyVersion,
+      evidenceRefs: validatedInput.evidenceRefs,
+      dataAsOf: validatedInput.dataAsOf,
+      expiresAt: validatedInput.expiresAt,
+      policyVersion: validatedInput.policyVersion,
       status: "AI_REVIEWED",
       ruleChecks: [],
     });

@@ -48,6 +48,26 @@ const nativeBalanceResponseSchema = z.object({
   id: z.number(),
 });
 
+const simulationResponseSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  result: z.object({
+    context: z.object({ slot: z.number().int().nonnegative() }).passthrough(),
+    value: z.object({
+      err: z.unknown().nullable(),
+      logs: z.array(z.string()).nullable(),
+      unitsConsumed: z.number().int().nonnegative().nullable().optional(),
+      replacementBlockhash: z
+        .object({
+          blockhash: z.string().min(1),
+          lastValidBlockHeight: z.number().int().positive(),
+        })
+        .nullable()
+        .optional(),
+    }).passthrough(),
+  }),
+  id: z.number(),
+});
+
 export type SolanaSignatureStatus =
   | { status: "NOT_FOUND" }
   | { status: "PENDING"; slot: number }
@@ -68,6 +88,23 @@ export interface SolanaNativeBalance {
   amountAtomic: string;
   decimals: 9;
 }
+
+export type SolanaSimulationResult =
+  | {
+      ok: true;
+      slot: number;
+      unitsConsumed: number | undefined;
+      logs: string[];
+      replacementBlockhash: string | undefined;
+      lastValidBlockHeight: number | undefined;
+    }
+  | {
+      ok: false;
+      slot: number;
+      error: unknown;
+      unitsConsumed: number | undefined;
+      logs: string[];
+    };
 
 export interface SolanaRpcProviderOptions {
   endpoint: string;
@@ -154,6 +191,48 @@ export class SolanaRpcProvider {
     return {
       amountAtomic: String(response.result.value),
       decimals: 9,
+    };
+  }
+
+  async simulateTransaction(
+    serializedTransaction: Buffer,
+    minContextSlot?: number,
+  ): Promise<SolanaSimulationResult> {
+    if (serializedTransaction.length === 0 || serializedTransaction.length > 1_232) {
+      throw new Error("Simulation transaction has an invalid size.");
+    }
+    if (
+      minContextSlot !== undefined &&
+      (!Number.isSafeInteger(minContextSlot) || minContextSlot < 0)
+    ) {
+      throw new Error("Simulation context slot must be a nonnegative safe integer.");
+    }
+    const response = simulationResponseSchema.parse(
+      await this.request("simulateTransaction", [
+        serializedTransaction.toString("base64"),
+        {
+          commitment: "confirmed",
+          encoding: "base64",
+          replaceRecentBlockhash: true,
+          sigVerify: false,
+          ...(minContextSlot === undefined ? {} : { minContextSlot }),
+        },
+      ]),
+    );
+    const { value } = response.result;
+    const common = {
+      slot: response.result.context.slot,
+      unitsConsumed: value.unitsConsumed ?? undefined,
+      logs: value.logs ?? [],
+    };
+    if (value.err !== null) {
+      return { ok: false, ...common, error: value.err };
+    }
+    return {
+      ok: true,
+      ...common,
+      replacementBlockhash: value.replacementBlockhash?.blockhash,
+      lastValidBlockHeight: value.replacementBlockhash?.lastValidBlockHeight,
     };
   }
 

@@ -14,7 +14,7 @@ const internalDependencies =
           config,
           repositories.proposalRepository,
         ),
-        proposalGenerationEvaluationService:
+        trustedProposalGenerationService:
           createProposalGenerationEvaluationService(config, repositories),
         taskRequestAuthorizer: new TaskTokenAuthorizer(
           config.INTERNAL_TASK_TOKEN,

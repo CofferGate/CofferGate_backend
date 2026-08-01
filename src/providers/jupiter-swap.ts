@@ -108,13 +108,48 @@ export function inspectUnsignedVersionedTransaction(transaction: Buffer): {
   messageOffset: number;
   message: Buffer;
 } {
+  const envelope = inspectVersionedTransaction(transaction);
+  if (
+    transaction
+      .subarray(envelope.signatureOffset, envelope.messageOffset)
+      .some((byte) => byte !== 0)
+  ) {
+    throw new JupiterSwapError("Jupiter swap transaction must be unsigned.");
+  }
+  return envelope;
+}
+
+export function inspectSignedVersionedTransaction(transaction: Buffer): {
+  signatureCount: number;
+  signatureOffset: number;
+  messageOffset: number;
+  message: Buffer;
+  firstSignature: Buffer;
+} {
+  const envelope = inspectVersionedTransaction(transaction);
+  const firstSignature = transaction.subarray(
+    envelope.signatureOffset,
+    envelope.signatureOffset + 64,
+  );
+  if (firstSignature.every((byte) => byte === 0)) {
+    throw new JupiterSwapError("Jupiter swap transaction must be signed.");
+  }
+  return { ...envelope, firstSignature };
+}
+
+function inspectVersionedTransaction(transaction: Buffer): {
+  signatureCount: number;
+  signatureOffset: number;
+  messageOffset: number;
+  message: Buffer;
+} {
+  if (transaction.length === 0 || transaction.length > 1_232) {
+    throw new JupiterSwapError("Jupiter swap transaction has an invalid size.");
+  }
   const { value: signatureCount, bytesRead } = decodeShortVector(transaction);
   const messageOffset = bytesRead + signatureCount * 64;
   if (signatureCount < 1 || messageOffset + 2 > transaction.length) {
     throw new JupiterSwapError("Jupiter swap transaction has an invalid signature envelope.");
-  }
-  if (transaction.subarray(bytesRead, messageOffset).some((byte) => byte !== 0)) {
-    throw new JupiterSwapError("Jupiter swap transaction must be unsigned.");
   }
   const versionPrefix = transaction[messageOffset]!;
   if ((versionPrefix & 0x80) === 0 || (versionPrefix & 0x7f) !== 0) {

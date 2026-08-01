@@ -3,6 +3,7 @@ import test from "node:test";
 import type { JupiterQuote } from "../../src/providers/jupiter-quote.js";
 import {
   decodeUnsignedVersionedTransaction,
+  inspectSignedVersionedTransaction,
   JupiterSwapError,
   JupiterSwapProvider,
 } from "../../src/providers/jupiter-swap.js";
@@ -116,6 +117,22 @@ test("Jupiter swap provider rejects signed and legacy transactions", () => {
   assert.throws(() => decodeUnsignedVersionedTransaction(signed), /must be unsigned/);
   assert.throws(() => decodeUnsignedVersionedTransaction(legacy), /message version 0/);
   assert.throws(() => decodeUnsignedVersionedTransaction("not base64"), /valid Base64/);
+});
+
+test("Jupiter swap provider inspects signed versioned transactions", () => {
+  const signature = Buffer.alloc(64, 7);
+  const transaction = Buffer.concat([
+    Buffer.from([1]), signature, Buffer.from([0x80, 1, 0, 0]),
+  ]);
+
+  const envelope = inspectSignedVersionedTransaction(transaction);
+
+  assert.equal(envelope.signatureCount, 1);
+  assert.deepEqual(envelope.firstSignature, signature);
+  assert.throws(
+    () => inspectSignedVersionedTransaction(Buffer.from(unsignedVersionedTransaction(), "base64")),
+    /must be signed/,
+  );
 });
 
 test("Jupiter swap provider maps HTTP failures", async () => {

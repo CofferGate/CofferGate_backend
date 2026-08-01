@@ -1,6 +1,7 @@
 import { createPublicKey, verify } from "node:crypto";
 import { KeyManagementServiceClient, protos } from "@google-cloud/kms";
 import crc32c from "fast-crc32c";
+import { decodeBase58 } from "../encoding/base58.js";
 import { inspectUnsignedVersionedTransaction } from "./jupiter-swap.js";
 
 export interface KmsClient {
@@ -83,7 +84,7 @@ export class CloudKmsTransactionSigner {
     const rawPublicKey = publicKeyDer.subarray(-32);
     if (
       rawPublicKey.length !== 32 ||
-      !rawPublicKey.equals(decodeBase58(this.options.expectedSignerPublicKey))
+      !rawPublicKey.equals(decodeSolanaPublicKey(this.options.expectedSignerPublicKey))
     ) {
       throw new CloudKmsSigningError("Cloud KMS public key does not match the Solana signer.");
     }
@@ -138,19 +139,10 @@ function toBuffer(value: Uint8Array | string | null | undefined): Buffer {
   throw new CloudKmsSigningError("Cloud KMS returned no signature.");
 }
 
-function decodeBase58(value: string): Buffer {
-  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  let decoded = 0n;
-  for (const character of value) {
-    const index = alphabet.indexOf(character);
-    if (index < 0) throw new CloudKmsSigningError("Solana signer public key is not Base58.");
-    decoded = decoded * 58n + BigInt(index);
+function decodeSolanaPublicKey(value: string): Buffer {
+  try {
+    return decodeBase58(value);
+  } catch {
+    throw new CloudKmsSigningError("Solana signer public key is not Base58.");
   }
-  const bytes: number[] = [];
-  while (decoded > 0n) {
-    bytes.unshift(Number(decoded & 0xffn));
-    decoded >>= 8n;
-  }
-  const leadingZeros = value.match(/^1*/)?.[0].length ?? 0;
-  return Buffer.concat([Buffer.alloc(leadingZeros), Buffer.from(bytes)]);
 }

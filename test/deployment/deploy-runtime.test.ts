@@ -34,6 +34,7 @@ if [[ "$*" == *"run services describe"* ]]; then echo "https://coffergate.exampl
   assert.match(log, /roles\/aiplatform\.user/);
   assert.match(log, /roles\/cloudtasks\.enqueuer/);
   assert.match(log, /roles\/cloudkms\.signerVerifier/);
+  assert.match(log, /roles\/cloudkms\.publicKeyViewer/);
   assert.match(log, /roles\/secretmanager\.secretAccessor/);
   assert.match(log, /--set-secrets=INTERNAL_TASK_TOKEN=internal-token:latest,JUPITER_API_KEY=jupiter-key:latest/);
   assert.match(log, /--no-allow-unauthenticated/);

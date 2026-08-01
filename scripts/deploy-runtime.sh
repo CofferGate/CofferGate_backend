@@ -36,6 +36,9 @@ gcloud iam service-accounts add-iam-policy-binding "${TASKS_SERVICE_ACCOUNT}" \
 gcloud kms keys add-iam-policy-binding "${kms_key}" \
   --project="${PROJECT_ID}" --location="${kms_location}" --keyring="${kms_key_ring}" \
   --member="${runtime_member}" --role='roles/cloudkms.signerVerifier' --quiet >/dev/null
+gcloud kms keys add-iam-policy-binding "${kms_key}" \
+  --project="${PROJECT_ID}" --location="${kms_location}" --keyring="${kms_key_ring}" \
+  --member="${runtime_member}" --role='roles/cloudkms.publicKeyViewer' --quiet >/dev/null
 for secret_name in "${INTERNAL_TASK_TOKEN_SECRET}" "${JUPITER_API_KEY_SECRET}"; do
   gcloud secrets add-iam-policy-binding "${secret_name}" \
     --project="${PROJECT_ID}" --member="${runtime_member}" \

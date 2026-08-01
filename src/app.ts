@@ -238,7 +238,7 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
         if (result?.status === "SIMULATION_FAILED") {
           return reply.status(422).send({ ...result, retryable: false });
         }
-        if (result?.status === "NOT_EXECUTABLE" || result?.status === "POLICY_REJECTED" || result?.status === "INTENT_EXPIRED") {
+        if (result?.status === "NOT_EXECUTABLE" || result?.status === "POLICY_REJECTED" || result?.status === "PROGRAM_REJECTED" || result?.status === "INTENT_EXPIRED") {
           return reply.status(409).send({ ...result, retryable: false });
         }
         return reply.status(200).send({ ...result, retryable: false });

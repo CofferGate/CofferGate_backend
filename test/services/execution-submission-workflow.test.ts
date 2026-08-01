@@ -70,6 +70,7 @@ function createWorkflow(overrides: Record<string, unknown> = {}) {
     blockHeightProvider: { getBlockHeight: async () => 99 },
     balanceProvider: { getTokenBalance: async () => ({ amountAtomic: "5000000" }) },
     confirmationScheduler: { schedule: async () => { events.push("schedule"); } },
+    programAllowlistValidator: { validate: () => undefined },
     outputTokenAccount: "usdc-account",
     now: () => new Date("2026-08-01T06:01:00.000Z"),
     ...overrides,
@@ -165,6 +166,14 @@ test("execution submission rejects ineligible and failed simulations", async () 
     ),
   });
   assert.deepEqual(await failed.workflow.execute("proposal-1"), { status: "SIMULATION_FAILED" });
+});
+
+test("execution submission rejects programs before simulation and signing", async () => {
+  const rejected = createWorkflow({
+    programAllowlistValidator: { validate: () => { throw new Error("denied"); } },
+  });
+  assert.deepEqual(await rejected.workflow.execute("proposal-1"), { status: "PROGRAM_REJECTED" });
+  assert.deepEqual(rejected.events, []);
 });
 
 test("execution submission rechecks policy and quote risk before claiming", async () => {

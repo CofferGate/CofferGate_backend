@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { encodeBase58 } from "../encoding/base58.js";
+import { inspectSignedVersionedTransaction } from "./jupiter-swap.js";
 
 const rpcErrorSchema = z.object({
   code: z.number(),
@@ -68,6 +70,12 @@ const simulationResponseSchema = z.object({
   id: z.number(),
 });
 
+const sendTransactionResponseSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  result: z.string().min(1),
+  id: z.number(),
+});
+
 export type SolanaSignatureStatus =
   | { status: "NOT_FOUND" }
   | { status: "PENDING"; slot: number }
@@ -110,6 +118,11 @@ export interface SolanaRpcProviderOptions {
   endpoint: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
+}
+
+export interface SolanaTransactionSubmissionOptions {
+  minContextSlot?: number;
+  maxRetries?: number;
 }
 
 export class SolanaRpcError extends Error {
@@ -234,6 +247,43 @@ export class SolanaRpcProvider {
       replacementBlockhash: value.replacementBlockhash?.blockhash,
       lastValidBlockHeight: value.replacementBlockhash?.lastValidBlockHeight,
     };
+  }
+
+  async sendTransaction(
+    serializedTransaction: Buffer,
+    options: SolanaTransactionSubmissionOptions = {},
+  ): Promise<string> {
+    const envelope = inspectSignedVersionedTransaction(serializedTransaction);
+    if (envelope.signatureCount !== 1) {
+      throw new SolanaRpcError("Transaction submission requires exactly one signer.");
+    }
+    const { minContextSlot, maxRetries = 3 } = options;
+    if (
+      minContextSlot !== undefined &&
+      (!Number.isSafeInteger(minContextSlot) || minContextSlot < 0)
+    ) {
+      throw new SolanaRpcError("Transaction context slot must be a nonnegative safe integer.");
+    }
+    if (!Number.isSafeInteger(maxRetries) || maxRetries < 0) {
+      throw new SolanaRpcError("Transaction maximum retries must be a nonnegative safe integer.");
+    }
+    const expectedSignature = encodeBase58(envelope.firstSignature);
+    const response = sendTransactionResponseSchema.parse(
+      await this.request("sendTransaction", [
+        serializedTransaction.toString("base64"),
+        {
+          encoding: "base64",
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+          maxRetries,
+          ...(minContextSlot === undefined ? {} : { minContextSlot }),
+        },
+      ]),
+    );
+    if (response.result !== expectedSignature) {
+      throw new SolanaRpcError("Solana RPC returned a mismatched transaction signature.");
+    }
+    return response.result;
   }
 
   private async request(method: string, params: unknown[]): Promise<unknown> {

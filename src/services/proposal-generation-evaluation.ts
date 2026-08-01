@@ -22,7 +22,6 @@ export interface ProposalPolicyEvaluation {
 export interface ProposalGenerationEvaluationDependencies {
   proposalGeneration: ProposalGeneration;
   proposalPolicyEvaluation: ProposalPolicyEvaluation;
-  executionTaskScheduler?: { schedule(proposalId: string): Promise<unknown> };
 }
 
 export type ProposalGenerationEvaluationResult =
@@ -51,7 +50,6 @@ export class ProposalGenerationEvaluationService {
       return { status: "PERSISTENCE_INCONSISTENCY" };
     }
     if (generationResult.proposal.status !== "AI_REVIEWED") {
-      await this.scheduleApprovedExecution(generationResult.proposal);
       return {
         status: "ALREADY_PROCESSED",
         proposal: generationResult.proposal,
@@ -64,7 +62,6 @@ export class ProposalGenerationEvaluationService {
         context,
       );
     if (evaluationResult.status === "EVALUATED") {
-      await this.scheduleApprovedExecution(evaluationResult.proposal);
       return evaluationResult;
     }
     if (evaluationResult.status === "NOT_FOUND") {
@@ -73,9 +70,4 @@ export class ProposalGenerationEvaluationService {
     return { status: "CONFLICT" };
   }
 
-  private async scheduleApprovedExecution(proposal: Proposal): Promise<void> {
-    if (proposal.status === "POLICY_APPROVED" && proposal.action === "SWAP") {
-      await this.dependencies.executionTaskScheduler?.schedule(proposal.proposalId);
-    }
-  }
 }

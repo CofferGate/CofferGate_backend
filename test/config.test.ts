@@ -19,12 +19,7 @@ test("configuration has Cloud Run compatible defaults", () => {
     PROPOSAL_TTL_SECONDS: 300,
     JUPITER_API_KEY: undefined,
     JUPITER_PRICE_API_URL: "https://api.jup.ag/price/v3",
-    JUPITER_QUOTE_API_URL: "https://api.jup.ag/swap/v1/quote",
-    JUPITER_SWAP_API_URL: "https://api.jup.ag/swap/v1/swap",
     JUPITER_TIMEOUT_MS: 5000,
-    MAX_PRIORITY_FEE_LAMPORTS: 1000000,
-    SIMULATION_COMPUTE_MARGIN_BPS: 2000,
-    MAX_COMPUTE_UNITS: 1400000,
     CLOUD_KMS_KEY_VERSION: undefined,
     INTERNAL_TASK_TOKEN: undefined,
     CLOUD_TASKS_LOCATION: undefined,
@@ -38,11 +33,9 @@ test("configuration has Cloud Run compatible defaults", () => {
     VERTEX_AI_MODEL: "gemini-2.5-flash",
     FIRESTORE_DATABASE_ID: "(default)",
     FIRESTORE_PROPOSALS_COLLECTION: "proposals",
-    FIRESTORE_EXECUTION_INTENTS_COLLECTION: "executionIntents",
     FIRESTORE_POLICIES_COLLECTION: "policies",
     FIRESTORE_CURRENT_POLICY_DOCUMENT: "current",
     FIRESTORE_DAILY_USAGE_COLLECTION: "dailyUsage",
-    FIRESTORE_DAILY_USAGE_LEDGER_COLLECTION: "dailyUsageLedger",
   });
 });
 

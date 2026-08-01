@@ -40,7 +40,21 @@ function validateProposalCreation(proposal: Proposal): Proposal {
 }
 
 function proposalsMatch(left: Proposal, right: Proposal): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return (
+    JSON.stringify(proposalCreationFields(left)) ===
+    JSON.stringify(proposalCreationFields(right))
+  );
+}
+
+function proposalCreationFields(proposal: Proposal) {
+  const {
+    decision: _decision,
+    status: _status,
+    ruleChecks: _ruleChecks,
+    execution: _execution,
+    ...creationFields
+  } = proposal;
+  return creationFields;
 }
 
 export class FirestoreProposalRepository implements ProposalRepository {

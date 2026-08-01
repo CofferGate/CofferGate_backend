@@ -63,6 +63,7 @@ const context = { now: new Date("2026-08-01T06:01:00.000Z") };
 
 test("proposal workflow generates, persists, and evaluates one proposal", async () => {
   const repository = new InMemoryProposalRepository();
+  const scheduled: string[] = [];
   const service = new ProposalGenerationEvaluationService({
     proposalGeneration: new ProposalGenerationService({
       proposalRepository: repository,
@@ -81,6 +82,9 @@ test("proposal workflow generates, persists, and evaluates one proposal", async 
         },
       }),
     }),
+    executionTaskScheduler: {
+      async schedule(proposalId) { scheduled.push(proposalId); },
+    },
   });
 
   const result = await service.generateAndEvaluate(input, context);
@@ -94,6 +98,7 @@ test("proposal workflow generates, persists, and evaluates one proposal", async 
     (await repository.findById(proposal.proposalId))?.status,
     "POLICY_APPROVED",
   );
+  assert.deepEqual(scheduled, [proposal.proposalId]);
 });
 
 test("proposal workflow does not reevaluate a processed retry", async () => {
@@ -104,6 +109,7 @@ test("proposal workflow does not reevaluate a processed retry", async () => {
     ruleChecks: [],
   };
   let evaluationCalls = 0;
+  let scheduleCalls = 0;
   const service = new ProposalGenerationEvaluationService({
     proposalGeneration: {
       async generate() {
@@ -116,6 +122,9 @@ test("proposal workflow does not reevaluate a processed retry", async () => {
         return { status: "EVALUATED", proposal: processedProposal };
       },
     },
+    executionTaskScheduler: {
+      async schedule() { scheduleCalls += 1; },
+    },
   });
 
   assert.deepEqual(await service.generateAndEvaluate(input, context), {
@@ -123,6 +132,7 @@ test("proposal workflow does not reevaluate a processed retry", async () => {
     proposal: processedProposal,
   });
   assert.equal(evaluationCalls, 0);
+  assert.equal(scheduleCalls, 1);
 });
 
 test("proposal workflow resumes evaluation after a creation-only retry", async () => {

@@ -19,6 +19,8 @@ import {
 } from "./repositories/proposal-repository.js";
 import { SystemReadinessService } from "./services/system-readiness.js";
 import { DashboardSnapshotService } from "./services/dashboard-snapshot.js";
+import type { ExecutionConfirmationPoller } from "./services/execution-confirmation-poller.js";
+import type { TaskRequestAuthorizer } from "./security/task-request-authorizer.js";
 
 type ApiConfig = Pick<
   AppConfig,
@@ -33,6 +35,8 @@ export interface AppDependencies {
   proposalRepository?: ProposalRepository;
   policyRepository?: PolicyRepository;
   dashboardSnapshotService?: DashboardSnapshotService;
+  executionConfirmationPoller?: ExecutionConfirmationPoller;
+  taskRequestAuthorizer?: TaskRequestAuthorizer;
 }
 
 export function createApp(dependencies: AppDependencies): FastifyInstance {
@@ -159,6 +163,30 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
 
     return apiResponseSchema(consoleSnapshotSchema).parse(response);
   });
+
+  if (dependencies.executionConfirmationPoller) {
+    if (!dependencies.taskRequestAuthorizer) {
+      throw new Error("Task request authorizer is required for internal routes.");
+    }
+    app.post<{ Params: { proposalId: string } }>(
+      "/internal/v1/executions/:proposalId/confirm",
+      async (request, reply) => {
+        if (!dependencies.taskRequestAuthorizer?.authorize(request.headers.authorization)) {
+          return reply.status(401).send({ status: "UNAUTHORIZED", retryable: false });
+        }
+        const result = await dependencies.executionConfirmationPoller?.poll(
+          request.params.proposalId,
+        );
+        if (result?.status === "WAITING") {
+          return reply
+            .header("retry-after", "5")
+            .status(503)
+            .send({ ...result, retryable: true });
+        }
+        return reply.status(200).send({ ...result, retryable: false });
+      },
+    );
+  }
 
   return app;
 }

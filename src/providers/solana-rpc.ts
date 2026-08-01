@@ -40,6 +40,14 @@ const tokenBalanceResponseSchema = z.object({
   id: z.number(),
 });
 
+const nativeBalanceResponseSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  result: z.object({
+    value: z.number().int().nonnegative().safe(),
+  }),
+  id: z.number(),
+});
+
 export type SolanaSignatureStatus =
   | { status: "NOT_FOUND" }
   | { status: "PENDING"; slot: number }
@@ -54,6 +62,11 @@ export type SolanaSignatureStatus =
 export interface SolanaTokenBalance {
   amountAtomic: string;
   decimals: number;
+}
+
+export interface SolanaNativeBalance {
+  amountAtomic: string;
+  decimals: 9;
 }
 
 export interface SolanaRpcProviderOptions {
@@ -128,6 +141,19 @@ export class SolanaRpcProvider {
     return {
       amountAtomic: response.result.value.amount,
       decimals: response.result.value.decimals,
+    };
+  }
+
+  async getNativeBalance(
+    walletAddress: string,
+    commitment: "confirmed" | "finalized" = "confirmed",
+  ): Promise<SolanaNativeBalance> {
+    const response = nativeBalanceResponseSchema.parse(
+      await this.request("getBalance", [walletAddress, { commitment }]),
+    );
+    return {
+      amountAtomic: String(response.result.value),
+      decimals: 9,
     };
   }
 

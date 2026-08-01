@@ -19,6 +19,8 @@ test("configuration has Cloud Run compatible defaults", () => {
     CLOUD_TASKS_SCHEDULE_DELAY_SECONDS: 5,
     REPOSITORY_MODE: "memory",
     GOOGLE_CLOUD_PROJECT: undefined,
+    VERTEX_AI_LOCATION: "us-central1",
+    VERTEX_AI_MODEL: "gemini-2.5-flash",
     FIRESTORE_DATABASE_ID: "(default)",
     FIRESTORE_PROPOSALS_COLLECTION: "proposals",
     FIRESTORE_POLICIES_COLLECTION: "policies",

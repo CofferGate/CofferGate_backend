@@ -6,6 +6,7 @@ test("configuration has Cloud Run compatible defaults", () => {
   assert.deepEqual(loadConfig({}), {
     PORT: 8080,
     HOST: "0.0.0.0",
+    LOG_LEVEL: undefined,
     ENVIRONMENT: "devnet",
     DATA_MODE: "live",
     OPERATIONS_WALLET_ADDRESS: "unconfigured",
@@ -47,4 +48,5 @@ test("configuration has Cloud Run compatible defaults", () => {
 
 test("configuration rejects invalid environments", () => {
   assert.throws(() => loadConfig({ ENVIRONMENT: "production" }));
+  assert.throws(() => loadConfig({ LOG_LEVEL: "verbose" }));
 });

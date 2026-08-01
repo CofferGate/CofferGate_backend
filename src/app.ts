@@ -34,6 +34,7 @@ type ApiConfig = Pick<
   | "ENVIRONMENT"
   | "DATA_MODE"
   | "OPERATIONS_WALLET_ADDRESS"
+  | "LOG_LEVEL"
 >;
 
 export interface AppDependencies {
@@ -49,7 +50,17 @@ export interface AppDependencies {
 }
 
 export function createApp(dependencies: AppDependencies): FastifyInstance {
-  const app = Fastify({ logger: false });
+  const app = Fastify({
+    logger: dependencies.config.LOG_LEVEL
+      ? {
+          level: dependencies.config.LOG_LEVEL,
+          redact: {
+            paths: ["req.headers.x-coffergate-task-token"],
+            censor: "[REDACTED]",
+          },
+        }
+      : false,
+  });
   const readinessService =
     dependencies.readinessService ??
     new SystemReadinessService({
@@ -195,6 +206,11 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
         const result = await dependencies.executionConfirmationPoller?.poll(
           request.params.proposalId,
         );
+        request.log.info({
+          event: "execution.confirmation.polled",
+          proposalId: request.params.proposalId,
+          resultStatus: result?.status,
+        });
         if (result?.status === "WAITING") {
           return reply
             .header("retry-after", "5")
@@ -229,6 +245,11 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
         const result = await dependencies.executionSubmissionWorkflow?.execute(
           request.params.proposalId,
         );
+        request.log.info({
+          event: "execution.submission.completed",
+          proposalId: request.params.proposalId,
+          resultStatus: result?.status,
+        });
         if (result?.status === "NOT_FOUND") {
           return reply.status(404).send({ ...result, retryable: false });
         }
@@ -271,6 +292,11 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
         const result = await trustedProposalGenerationService.generate(
           parsedRequest.data.proposalId,
         );
+        request.log.info({
+          event: "proposal.generation.completed",
+          proposalId: parsedRequest.data.proposalId,
+          resultStatus: result.status,
+        });
         if (result.status === "POLICY_NOT_CONFIGURED") {
           return reply.status(409).send({ ...result, retryable: false });
         }
@@ -309,6 +335,11 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
         return reply.status(400).send({ status: "INVALID_SCHEDULER_REQUEST", retryable: false });
       }
       const result = await trustedProposalGenerationService.generate(proposalId);
+      request.log.info({
+        event: "proposal.generation.scheduled.completed",
+        proposalId,
+        resultStatus: result.status,
+      });
       if (result.status === "PERSISTENCE_INCONSISTENCY") {
         return reply.header("retry-after", "5").status(503).send({ ...result, retryable: true });
       }

@@ -81,6 +81,8 @@ TARGET_USDC_BALANCE='20' \
 
 스크립트는 Runtime 계정에 Firestore·Vertex AI·Cloud Tasks·KMS 서명·Secret 접근 권한을 부여하고, Tasks 계정에는 Cloud Run Invoker 권한만 부여합니다. Cloud Run은 인증 없는 호출을 허용하지 않습니다.
 
+운영 배포는 기본 `LOG_LEVEL=info`로 요청과 Proposal 생성·제출·확인 결과를 구조화 로그로 기록합니다. `x-coffergate-task-token` Header는 로그에서 자동으로 마스킹됩니다.
+
 ### Scheduled proposal generation
 
 Cloud Run 배포와 내부 Token Secret 생성 후 다음 환경 변수를 설정해 Cloud Scheduler Job을 생성하거나 갱신합니다.

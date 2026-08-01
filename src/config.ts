@@ -3,6 +3,7 @@ import { z } from "zod";
 const configSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
   HOST: z.string().default("0.0.0.0"),
+  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).optional(),
   ENVIRONMENT: z.enum(["mock", "devnet", "mainnet-beta"]).default("devnet"),
   DATA_MODE: z.enum(["mock", "live"]).default("live"),
   OPERATIONS_WALLET_ADDRESS: z.string().default("unconfigured"),

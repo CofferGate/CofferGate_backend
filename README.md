@@ -59,6 +59,28 @@ gcloud builds submit \
 
 런타임 환경 변수와 Secret Manager 연결은 Cloud Run 서비스 설정에서 관리하며 이미지와 `cloudbuild.yaml`에는 Secret 값을 저장하지 않습니다.
 
+운영 Runtime의 IAM·Secret·KMS·Cloud Tasks Queue와 Cloud Run 설정은 다음 스크립트로 적용합니다. Runtime 및 Tasks 서비스 계정과 두 Secret은 사전에 생성해야 합니다.
+
+```bash
+PROJECT_ID='your-project-id' \
+REGION='asia-northeast3' \
+SERVICE_NAME='coffergate-backend' \
+IMAGE_URI='asia-northeast3-docker.pkg.dev/your-project-id/coffergate/coffergate-backend:build-id' \
+RUNTIME_SERVICE_ACCOUNT='runtime@your-project-id.iam.gserviceaccount.com' \
+TASKS_SERVICE_ACCOUNT='tasks@your-project-id.iam.gserviceaccount.com' \
+TASKS_QUEUE='execution' \
+INTERNAL_TASK_TOKEN_SECRET='coffergate-internal-task-token' \
+JUPITER_API_KEY_SECRET='coffergate-jupiter-api-key' \
+CLOUD_KMS_KEY_VERSION='projects/your-project-id/locations/asia-northeast3/keyRings/coffergate/cryptoKeys/solana/cryptoKeyVersions/1' \
+OPERATIONS_WALLET_ADDRESS='solana-public-key' \
+USDC_MINT='network-usdc-mint' \
+USDC_TOKEN_ACCOUNT='operations-wallet-usdc-token-account' \
+TARGET_USDC_BALANCE='20' \
+./scripts/deploy-runtime.sh
+```
+
+스크립트는 Runtime 계정에 Firestore·Vertex AI·Cloud Tasks·KMS 서명·Secret 접근 권한을 부여하고, Tasks 계정에는 Cloud Run Invoker 권한만 부여합니다. Cloud Run은 인증 없는 호출을 허용하지 않습니다.
+
 ### Scheduled proposal generation
 
 Cloud Run 배포와 내부 Token Secret 생성 후 다음 환경 변수를 설정해 Cloud Scheduler Job을 생성하거나 갱신합니다.

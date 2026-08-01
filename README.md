@@ -55,6 +55,24 @@ gcloud builds submit \
 
 런타임 환경 변수와 Secret Manager 연결은 Cloud Run 서비스 설정에서 관리하며 이미지와 `cloudbuild.yaml`에는 Secret 값을 저장하지 않습니다.
 
+### Scheduled proposal generation
+
+Cloud Run 배포와 내부 Token Secret 생성 후 다음 환경 변수를 설정해 Cloud Scheduler Job을 생성하거나 갱신합니다.
+
+```bash
+PROJECT_ID='your-project-id' \
+REGION='asia-northeast3' \
+SERVICE_NAME='coffergate-backend' \
+SCHEDULER_JOB_NAME='coffergate-proposal-generation' \
+SCHEDULER_SERVICE_ACCOUNT='scheduler@your-project-id.iam.gserviceaccount.com' \
+INTERNAL_TASK_TOKEN_SECRET='coffergate-internal-task-token' \
+SCHEDULER_CRON='*/5 * * * *' \
+SCHEDULER_TIME_ZONE='Etc/UTC' \
+./scripts/deploy-scheduler.sh
+```
+
+스크립트는 Scheduler 서비스 계정에 Cloud Run Invoker 역할을 부여하고 OIDC 대상과 재시도 정책을 설정합니다. 내부 Token은 Secret Manager에서 읽으며 파일이나 Git에 저장하지 않습니다. Scheduler Job 조회 권한이 있는 사용자는 HTTP Header 설정을 볼 수 있으므로 해당 리소스의 IAM 권한도 최소화해야 합니다.
+
 ## HTTP endpoints
 
 - `GET /health/live`

@@ -1,5 +1,20 @@
 import { z } from "zod";
 
+const liveFirestoreRequirements = [
+  "GOOGLE_CLOUD_PROJECT",
+  "OPERATIONS_WALLET_ADDRESS",
+  "USDC_MINT",
+  "USDC_TOKEN_ACCOUNT",
+  "TARGET_USDC_BALANCE",
+  "JUPITER_API_KEY",
+  "CLOUD_KMS_KEY_VERSION",
+  "INTERNAL_TASK_TOKEN",
+  "CLOUD_TASKS_LOCATION",
+  "CLOUD_TASKS_QUEUE",
+  "CLOUD_TASKS_TARGET_BASE_URL",
+  "CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL",
+] as const;
+
 const configSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
   HOST: z.string().default("0.0.0.0"),
@@ -49,10 +64,29 @@ const configSchema = z.object({
     .default("dailyUsageLedger"),
 });
 
+const validatedConfigSchema = configSchema.superRefine((config, context) => {
+  if (config.REPOSITORY_MODE !== "firestore" || config.DATA_MODE !== "live") {
+    return;
+  }
+
+  for (const field of liveFirestoreRequirements) {
+    const value = config[field];
+    if (value === undefined || value === "unconfigured") {
+      context.addIssue({
+        code: "custom",
+        path: [field],
+        message: `${field} is required for a live Firestore runtime`,
+      });
+    }
+  }
+});
+
 export type AppConfig = z.infer<typeof configSchema>;
 
 export function loadConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): AppConfig {
-  return configSchema.parse(environment);
+  const config = configSchema.parse(environment);
+  validatedConfigSchema.parse(config);
+  return config;
 }

@@ -50,3 +50,47 @@ test("configuration rejects invalid environments", () => {
   assert.throws(() => loadConfig({ ENVIRONMENT: "production" }));
   assert.throws(() => loadConfig({ LOG_LEVEL: "verbose" }));
 });
+
+test("configuration rejects incomplete live Firestore runtimes", () => {
+  assert.throws(
+    () => loadConfig({ REPOSITORY_MODE: "firestore", DATA_MODE: "live" }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /GOOGLE_CLOUD_PROJECT/);
+      assert.match(error.message, /CLOUD_KMS_KEY_VERSION/);
+      assert.match(error.message, /CLOUD_TASKS_TARGET_BASE_URL/);
+      return true;
+    },
+  );
+});
+
+test("configuration accepts complete live Firestore runtimes", () => {
+  const config = loadConfig({
+    REPOSITORY_MODE: "firestore",
+    DATA_MODE: "live",
+    GOOGLE_CLOUD_PROJECT: "coffergate-devnet",
+    OPERATIONS_WALLET_ADDRESS: "wallet-address",
+    USDC_MINT: "usdc-mint",
+    USDC_TOKEN_ACCOUNT: "usdc-token-account",
+    TARGET_USDC_BALANCE: "20",
+    JUPITER_API_KEY: "jupiter-key",
+    CLOUD_KMS_KEY_VERSION:
+      "projects/coffergate-devnet/locations/global/keyRings/coffergate/cryptoKeys/solana/cryptoKeyVersions/1",
+    INTERNAL_TASK_TOKEN: "a-secure-internal-task-token-12345",
+    CLOUD_TASKS_LOCATION: "asia-northeast3",
+    CLOUD_TASKS_QUEUE: "execution",
+    CLOUD_TASKS_TARGET_BASE_URL: "https://coffergate.example.com",
+    CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL: "tasks@coffergate-devnet.iam.gserviceaccount.com",
+  });
+
+  assert.equal(config.REPOSITORY_MODE, "firestore");
+  assert.equal(config.DATA_MODE, "live");
+});
+
+test("configuration permits partial integrations outside live Firestore runtime", () => {
+  assert.equal(loadConfig({ REPOSITORY_MODE: "memory" }).REPOSITORY_MODE, "memory");
+  assert.equal(
+    loadConfig({ REPOSITORY_MODE: "firestore", DATA_MODE: "mock" }).DATA_MODE,
+    "mock",
+  );
+});

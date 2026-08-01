@@ -57,6 +57,7 @@ export function createExecutionSubmissionWorkflow(
       expectedSignerPublicKey: config.OPERATIONS_WALLET_ADDRESS,
     }),
     submitter: solanaRpc,
+    blockHeightProvider: solanaRpc,
     balanceProvider: solanaRpc,
     confirmationScheduler: new ConfirmationTaskScheduler({
       projectId,

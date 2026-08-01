@@ -12,12 +12,13 @@ interface QuoteProvider { getExactInQuote(request: JupiterQuoteRequest): Promise
 interface SwapProvider { createUnsignedTransaction(quote: JupiterQuote): Promise<UnsignedJupiterSwapTransaction> }
 interface TransactionSigner { signTransaction(transaction: Buffer): Promise<SignedSolanaTransaction> }
 interface TransactionSubmitter { sendTransaction(transaction: Buffer, options?: { minContextSlot?: number }): Promise<string> }
+interface BlockHeightProvider { getBlockHeight(minContextSlot?: number): Promise<number> }
 interface BalanceProvider { getTokenBalance(account: string): Promise<{ amountAtomic: string }> }
 interface ConfirmationScheduler { schedule(proposalId: string): Promise<unknown> }
 
 export type ExecutionSubmissionResult =
   | { status: "SUBMITTED"; signature: string }
-  | { status: "NOT_FOUND" | "NOT_EXECUTABLE" | "POLICY_REJECTED" | "SIMULATION_FAILED" | "CONFLICT" };
+  | { status: "NOT_FOUND" | "NOT_EXECUTABLE" | "POLICY_REJECTED" | "SIMULATION_FAILED" | "INTENT_EXPIRED" | "CONFLICT" };
 
 export interface ExecutionSubmissionWorkflowDependencies {
   proposalRepository: ProposalRepository;
@@ -28,6 +29,7 @@ export interface ExecutionSubmissionWorkflowDependencies {
   simulationService: ExecutionSimulationService;
   signer: TransactionSigner;
   submitter: TransactionSubmitter;
+  blockHeightProvider: BlockHeightProvider;
   balanceProvider: BalanceProvider;
   confirmationScheduler: ConfirmationScheduler;
   outputTokenAccount: string;
@@ -108,6 +110,19 @@ export class ExecutionSubmissionWorkflow {
   }
 
   private async submitPrepared(intent: ExecutionIntent): Promise<ExecutionSubmissionResult> {
+    const currentBlockHeight = await this.dependencies.blockHeightProvider.getBlockHeight(
+      intent.minContextSlot,
+    );
+    if (currentBlockHeight > intent.lastValidBlockHeight) {
+      const expired = await this.dependencies.submissionRepository.expire(
+        intent.proposalId,
+        intent.transactionSignature,
+        (this.dependencies.now?.() ?? new Date()).toISOString(),
+      );
+      return expired === "EXPIRED"
+        ? { status: "INTENT_EXPIRED" }
+        : { status: "CONFLICT" };
+    }
     const serializedTransaction = Buffer.from(intent.serializedTransactionBase64, "base64");
     const signature = await this.dependencies.submitter.sendTransaction(
       serializedTransaction,

@@ -90,6 +90,22 @@ test("Solana RPC provider returns atomic token balances", async () => {
   });
 });
 
+test("Solana RPC provider returns atomic native balance", async () => {
+  const mock = createFetch([
+    { jsonrpc: "2.0", result: { value: 1_250_000_000 }, id: 1 },
+  ]);
+  const provider = new SolanaRpcProvider({
+    endpoint: "https://api.devnet.solana.com",
+    fetch: mock.fetch,
+  });
+
+  assert.deepEqual(await provider.getNativeBalance("wallet-address"), {
+    amountAtomic: "1250000000",
+    decimals: 9,
+  });
+  assert.equal((mock.requests[0] as { method: string }).method, "getBalance");
+});
+
 test("Solana RPC provider rejects RPC errors and malformed balances", async () => {
   const rpcErrorProvider = new SolanaRpcProvider({
     endpoint: "https://api.devnet.solana.com",

@@ -183,6 +183,16 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
             .status(503)
             .send({ ...result, retryable: true });
         }
+        if (
+          result?.status === "TRANSACTION_FAILED" &&
+          result.persistence !== "FAILED" &&
+          result.persistence !== "ALREADY_FAILED"
+        ) {
+          return reply
+            .header("retry-after", "5")
+            .status(503)
+            .send({ ...result, retryable: true });
+        }
         return reply.status(200).send({ ...result, retryable: false });
       },
     );

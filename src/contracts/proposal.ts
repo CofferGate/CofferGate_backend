@@ -60,6 +60,13 @@ export const executionSummarySchema = z.object({
   confirmedAt: z.string().optional(),
   commitment: commitmentLevelSchema.optional(),
   reconciliation: reconciliationSchema.optional(),
+  failure: z
+    .object({
+      code: z.string().min(1),
+      message: z.string().min(1).max(1000),
+      observedAt: z.string().datetime(),
+    })
+    .optional(),
 });
 
 export const proposalSchema = z.object({

@@ -7,6 +7,7 @@ import type {
 } from "../../src/infrastructure/firestore.js";
 import { FirestoreDailyUsageRepository } from "../../src/repositories/daily-usage-repository.js";
 import { FirestoreExecutionCompletionRepository } from "../../src/repositories/execution-completion-repository.js";
+import { FirestoreExecutionFailureRepository } from "../../src/repositories/execution-failure-repository.js";
 import { FirestorePolicyRepository } from "../../src/repositories/policy-repository.js";
 import { FirestoreProposalRepository } from "../../src/repositories/proposal-repository.js";
 
@@ -408,5 +409,58 @@ test("Firestore execution completion rejects invalid completion payloads", async
   await assert.rejects(
     () => repository.complete({ ...reconciledProposal, status: "CONFIRMED" }),
     /valid execution completion/,
+  );
+});
+
+test("Firestore execution failure atomically transitions submitted proposal", async () => {
+  const database = createDatabase({
+    proposals: { [proposal.proposalId]: submittedProposal },
+  });
+  const repository = new FirestoreExecutionFailureRepository(database);
+
+  assert.equal(
+    await repository.fail(
+      proposal.proposalId,
+      "signature_01",
+      "InstructionError",
+      "2026-08-01T06:02:00.000Z",
+    ),
+    "FAILED",
+  );
+  const failed = await new FirestoreProposalRepository(database).findById(
+    proposal.proposalId,
+  );
+  assert.equal(failed?.status, "FAILED");
+  assert.equal(failed?.execution?.failure?.code, "ONCHAIN_TRANSACTION_FAILED");
+  assert.equal(
+    await repository.fail(
+      proposal.proposalId,
+      "signature_01",
+      "InstructionError",
+      "2026-08-01T06:02:00.000Z",
+    ),
+    "ALREADY_FAILED",
+  );
+});
+
+test("Firestore execution failure rejects signature conflicts", async () => {
+  const database = createDatabase({
+    proposals: { [proposal.proposalId]: submittedProposal },
+  });
+  const repository = new FirestoreExecutionFailureRepository(database);
+
+  assert.equal(
+    await repository.fail(
+      proposal.proposalId,
+      "different-signature",
+      "failure",
+      "2026-08-01T06:02:00.000Z",
+    ),
+    "SIGNATURE_CONFLICT",
+  );
+  assert.equal(
+    (await new FirestoreProposalRepository(database).findById(proposal.proposalId))
+      ?.status,
+    "SUBMITTED",
   );
 });

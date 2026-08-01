@@ -33,12 +33,13 @@ test("live readiness probes check every external execution dependency", async ()
 });
 
 test("live readiness isolates failed dependencies", async () => {
+  const failures: Array<{ serviceId: string; error: unknown }> = [];
   const probes = createLiveReadinessProbes(config, {
     checkFirestore: async () => undefined,
     checkKms: async () => { throw new Error("unavailable"); },
     checkJupiter: async () => undefined,
     checkSolana: async () => undefined,
-  });
+  }, (serviceId, error) => { failures.push({ serviceId, error }); });
   const readiness = await new SystemReadinessService({
     dataMode: "live",
     network: "devnet",
@@ -54,4 +55,7 @@ test("live readiness isolates failed dependencies", async () => {
     readiness.services.find((service) => service.serviceId === "solana-rpc")?.status,
     "healthy",
   );
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0]?.serviceId, "cloud-kms");
+  assert.match(String(failures[0]?.error), /unavailable/);
 });

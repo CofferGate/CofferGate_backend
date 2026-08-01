@@ -12,16 +12,22 @@ export interface LiveReadinessDependencies {
   checkSolana(): Promise<void>;
 }
 
+export type ReadinessProbeFailureReporter = (
+  serviceId: string,
+  error: unknown,
+) => void;
+
 export function createLiveReadinessProbes(
   config: AppConfig,
   dependencies: LiveReadinessDependencies,
+  reportFailure: ReadinessProbeFailureReporter = reportProbeFailure,
 ): ReadinessProbes {
   return {
     "vertex-ai": async () => configured(
       Boolean(config.GOOGLE_CLOUD_PROJECT && config.VERTEX_AI_LOCATION && config.VERTEX_AI_MODEL),
       "Vertex AI runtime configuration is incomplete.",
     ),
-    firestore: () => checked(dependencies.checkFirestore),
+    firestore: () => checked("firestore", dependencies.checkFirestore, reportFailure),
     "private-executor": async () => configured(
       Boolean(
         config.CLOUD_KMS_KEY_VERSION && config.OPERATIONS_WALLET_ADDRESS !== "unconfigured" &&
@@ -29,9 +35,9 @@ export function createLiveReadinessProbes(
       ),
       "Private Executor runtime configuration is incomplete.",
     ),
-    "cloud-kms": () => checked(dependencies.checkKms),
-    "jupiter-api": () => checked(dependencies.checkJupiter),
-    "solana-rpc": () => checked(dependencies.checkSolana),
+    "cloud-kms": () => checked("cloud-kms", dependencies.checkKms, reportFailure),
+    "jupiter-api": () => checked("jupiter-api", dependencies.checkJupiter, reportFailure),
+    "solana-rpc": () => checked("solana-rpc", dependencies.checkSolana, reportFailure),
   };
 }
 
@@ -72,9 +78,26 @@ export function createLiveReadinessService(config: AppConfig): SystemReadinessSe
   });
 }
 
-async function checked(check: () => Promise<void>) {
-  await check();
-  return { status: "healthy" as const };
+async function checked(
+  serviceId: string,
+  check: () => Promise<void>,
+  reportFailure: ReadinessProbeFailureReporter,
+) {
+  try {
+    await check();
+    return { status: "healthy" as const };
+  } catch (error) {
+    reportFailure(serviceId, error);
+    throw error;
+  }
+}
+
+function reportProbeFailure(serviceId: string, error: unknown): void {
+  console.error(JSON.stringify({
+    event: "readiness.probe.failed",
+    serviceId,
+    error: error instanceof Error ? error.message : "Unknown readiness probe error.",
+  }));
 }
 
 function configured(isConfigured: boolean, impact: string) {

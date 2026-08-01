@@ -119,6 +119,9 @@ test("proposal policy evaluation reports missing and concurrent changes", async 
   );
 
   const conflictingRepository: ProposalRepository = {
+    async create() {
+      return "ID_CONFLICT";
+    },
     async list() {
       return [proposal];
     },

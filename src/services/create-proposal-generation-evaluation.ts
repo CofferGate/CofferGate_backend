@@ -12,6 +12,7 @@ import { ProposalGenerationService } from "./proposal-generation.js";
 import { ProposalPolicyEvaluationService } from "./proposal-policy-evaluation.js";
 import { ProposalGenerationContextService } from "./proposal-generation-context.js";
 import { TrustedProposalGenerationService } from "./trusted-proposal-generation.js";
+import { DemoAttestationTaskScheduler } from "../providers/demo-attestation-tasks.js";
 
 export function createProposalGenerationEvaluationService(
   config: AppConfig,
@@ -27,6 +28,10 @@ export function createProposalGenerationEvaluationService(
     !config.USDC_MINT ||
     !config.USDC_TOKEN_ACCOUNT ||
     !config.TARGET_USDC_BALANCE ||
+    !config.CLOUD_TASKS_LOCATION ||
+    !config.CLOUD_TASKS_QUEUE ||
+    !config.CLOUD_TASKS_TARGET_BASE_URL ||
+    !config.CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL ||
     !config.INTERNAL_TASK_TOKEN
   ) {
     throw new Error("Trusted proposal generation configuration is incomplete.");
@@ -47,6 +52,14 @@ export function createProposalGenerationEvaluationService(
       policyGate: new PolicyGateService({
         getCurrentPolicy: () => repositories.policyRepository.getCurrent(),
       }),
+    }),
+    demoAttestationScheduler: new DemoAttestationTaskScheduler({
+      projectId: config.GOOGLE_CLOUD_PROJECT,
+      location: config.CLOUD_TASKS_LOCATION,
+      queue: config.CLOUD_TASKS_QUEUE,
+      targetBaseUrl: config.CLOUD_TASKS_TARGET_BASE_URL,
+      oidcServiceAccountEmail: config.CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL,
+      internalTaskToken: config.INTERNAL_TASK_TOKEN,
     }),
   });
   const solanaRpc = new SolanaRpcProvider({

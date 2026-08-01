@@ -42,6 +42,7 @@ export const reconciliationSchema = z.object({
 });
 
 export const executionSummarySchema = z.object({
+  mode: z.literal("demo").optional(),
   routeLabel: z.string().optional(),
   expectedInputAmount: z.string().optional(),
   expectedOutputAmount: z.string().optional(),
@@ -52,6 +53,8 @@ export const executionSummarySchema = z.object({
   computeUnits: z.number().optional(),
   kmsKeyVersion: z.string().optional(),
   kmsRequested: z.boolean(),
+  attestationSignature: z.string().min(1).optional(),
+  attestedAt: z.string().datetime().optional(),
   transactionSignature: z.string().optional(),
   submittedAt: z.string().optional(),
   outputTokenAccount: z.string().optional(),

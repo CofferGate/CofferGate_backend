@@ -5,6 +5,7 @@ export const proposalStatusSchema = z.enum([
   "PROPOSED",
   "AI_REVIEWED",
   "POLICY_APPROVED",
+  "SIMULATED",
   "ESCALATED",
   "BLOCKED",
   "EXECUTING",

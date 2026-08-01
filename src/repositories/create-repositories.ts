@@ -14,10 +14,11 @@ import {
   FirestoreProposalRepository,
   InMemoryProposalRepository,
   type ProposalRepository,
+  type DemoAttestationRepository,
 } from "./proposal-repository.js";
 
 export interface AppRepositories {
-  proposalRepository: ProposalRepository;
+  proposalRepository: ProposalRepository & DemoAttestationRepository;
   policyRepository: PolicyRepository;
   dailyUsageRepository: DailyUsageRepository;
 }

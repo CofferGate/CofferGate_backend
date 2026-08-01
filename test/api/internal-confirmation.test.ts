@@ -57,3 +57,18 @@ test("internal confirmation endpoint acknowledges terminal results", async () =>
   assert.equal(response.json().retryable, false);
   await app.close();
 });
+
+test("internal confirmation endpoint retries unpersisted transaction failures", async () => {
+  const app = createInternalApp({
+    status: "TRANSACTION_FAILED",
+    persistence: "STATUS_CONFLICT",
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: "/internal/v1/executions/p1/confirm",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().retryable, true);
+  await app.close();
+});

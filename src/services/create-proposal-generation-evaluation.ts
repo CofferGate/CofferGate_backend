@@ -6,6 +6,7 @@ import { SolanaTreasurySnapshotProvider } from "../providers/solana-treasury.js"
 import type { DailyUsageRepository } from "../repositories/daily-usage-repository.js";
 import type { PolicyRepository } from "../repositories/policy-repository.js";
 import type { ProposalRepository } from "../repositories/proposal-repository.js";
+import type { ProposalSuppressionRepository } from "../repositories/proposal-suppression-repository.js";
 import { PolicyGateService } from "./policy-gate.js";
 import { ProposalGenerationEvaluationService } from "./proposal-generation-evaluation.js";
 import { ProposalGenerationService } from "./proposal-generation.js";
@@ -20,6 +21,7 @@ export function createProposalGenerationEvaluationService(
     proposalRepository: ProposalRepository;
     policyRepository: PolicyRepository;
     dailyUsageRepository: DailyUsageRepository;
+    proposalSuppressionRepository: ProposalSuppressionRepository;
   },
 ): TrustedProposalGenerationService {
   if (
@@ -40,6 +42,8 @@ export function createProposalGenerationEvaluationService(
   const generationEvaluator = new ProposalGenerationEvaluationService({
     proposalGeneration: new ProposalGenerationService({
       proposalRepository: repositories.proposalRepository,
+      proposalSuppressionRepository: repositories.proposalSuppressionRepository,
+      duplicateCooldownSeconds: config.PROPOSAL_DUPLICATE_COOLDOWN_SECONDS,
       proposalGenerator: new VertexProposalProvider({
         projectId: config.GOOGLE_CLOUD_PROJECT,
         location: config.VERTEX_AI_LOCATION,

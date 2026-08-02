@@ -17,11 +17,17 @@ import {
   type DemoAttestationRepository,
   type DevnetPaymentExecutionRepository,
 } from "./proposal-repository.js";
+import {
+  FirestoreProposalSuppressionRepository,
+  InMemoryProposalSuppressionRepository,
+  type ProposalSuppressionRepository,
+} from "./proposal-suppression-repository.js";
 
 export interface AppRepositories {
   proposalRepository: ProposalRepository & DemoAttestationRepository & DevnetPaymentExecutionRepository;
   policyRepository: PolicyRepository;
   dailyUsageRepository: DailyUsageRepository;
+  proposalSuppressionRepository: ProposalSuppressionRepository;
 }
 
 export function createRepositories(config: AppConfig): AppRepositories {
@@ -30,6 +36,7 @@ export function createRepositories(config: AppConfig): AppRepositories {
       proposalRepository: new InMemoryProposalRepository(),
       policyRepository: new InMemoryPolicyRepository(),
       dailyUsageRepository: new InMemoryDailyUsageRepository(),
+      proposalSuppressionRepository: new InMemoryProposalSuppressionRepository(),
     };
   }
 
@@ -47,6 +54,10 @@ export function createRepositories(config: AppConfig): AppRepositories {
     dailyUsageRepository: new FirestoreDailyUsageRepository(
       database,
       config.FIRESTORE_DAILY_USAGE_COLLECTION,
+    ),
+    proposalSuppressionRepository: new FirestoreProposalSuppressionRepository(
+      database,
+      config.FIRESTORE_PROPOSAL_SUPPRESSIONS_COLLECTION,
     ),
   };
 }

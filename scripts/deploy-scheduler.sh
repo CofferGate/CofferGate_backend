@@ -18,7 +18,7 @@ for variable_name in "${required_variables[@]}"; do
 done
 
 SCHEDULER_LOCATION="${SCHEDULER_LOCATION:-${REGION}}"
-SCHEDULER_CRON="${SCHEDULER_CRON:-*/5 * * * *}"
+SCHEDULER_CRON="${SCHEDULER_CRON:-*/15 * * * *}"
 SCHEDULER_TIME_ZONE="${SCHEDULER_TIME_ZONE:-Etc/UTC}"
 
 service_url="$(gcloud run services describe "${SERVICE_NAME}" \

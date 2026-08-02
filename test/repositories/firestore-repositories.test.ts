@@ -8,6 +8,7 @@ import type {
 import { FirestoreDailyUsageRepository } from "../../src/repositories/daily-usage-repository.js";
 import { FirestorePolicyRepository } from "../../src/repositories/policy-repository.js";
 import { FirestoreProposalRepository } from "../../src/repositories/proposal-repository.js";
+import { FirestoreProposalSuppressionRepository } from "../../src/repositories/proposal-suppression-repository.js";
 
 const proposal: Proposal = {
   proposalId: "proposal_01",
@@ -106,6 +107,23 @@ test("Firestore proposal repository lists and finds validated proposals", async 
   assert.deepEqual(await repository.list(), [proposal]);
   assert.deepEqual(await repository.findById(proposal.proposalId), proposal);
   assert.equal(await repository.findById("missing"), null);
+});
+
+test("Firestore proposal suppression repository enforces cooldown atomically", async () => {
+  const repository = new FirestoreProposalSuppressionRepository(createDatabase({}));
+
+  assert.equal(
+    await repository.claim("fingerprint", new Date("2026-08-01T06:00:00.000Z"), 1_800),
+    "CLAIMED",
+  );
+  assert.equal(
+    await repository.claim("fingerprint", new Date("2026-08-01T06:05:00.000Z"), 1_800),
+    "SUPPRESSED",
+  );
+  assert.equal(
+    await repository.claim("fingerprint", new Date("2026-08-01T06:30:00.000Z"), 1_800),
+    "CLAIMED",
+  );
 });
 test("Firestore proposal repository atomically creates reviewed proposals", async () => {
   const database = createDatabase({});

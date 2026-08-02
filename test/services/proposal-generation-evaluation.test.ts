@@ -4,6 +4,7 @@ import type { Policy, Proposal } from "../../src/contracts/index.js";
 import type { VertexProposalGenerationInput } from "../../src/providers/vertex-proposal.js";
 import { InMemoryDailyUsageRepository } from "../../src/repositories/daily-usage-repository.js";
 import { InMemoryProposalRepository } from "../../src/repositories/proposal-repository.js";
+import { InMemoryProposalSuppressionRepository } from "../../src/repositories/proposal-suppression-repository.js";
 import { PolicyGateService } from "../../src/services/policy-gate.js";
 import { ProposalGenerationEvaluationService } from "../../src/services/proposal-generation-evaluation.js";
 import { ProposalGenerationService } from "../../src/services/proposal-generation.js";
@@ -66,6 +67,8 @@ test("proposal workflow generates, persists, and evaluates one proposal", async 
   const service = new ProposalGenerationEvaluationService({
     proposalGeneration: new ProposalGenerationService({
       proposalRepository: repository,
+      proposalSuppressionRepository: new InMemoryProposalSuppressionRepository(),
+      duplicateCooldownSeconds: 1_800,
       proposalGenerator: {
         async generate() {
           return proposal;
@@ -168,6 +171,26 @@ test("proposal workflow preserves generation failures", async () => {
 
     assert.deepEqual(await service.generateAndEvaluate(input), { status });
   }
+});
+
+test("proposal workflow preserves duplicate suppression", async () => {
+  const service = new ProposalGenerationEvaluationService({
+    proposalGeneration: {
+      async generate() {
+        return { status: "DUPLICATE_SUPPRESSED", fingerprint: "fingerprint" };
+      },
+    },
+    proposalPolicyEvaluation: {
+      async evaluate() {
+        throw new Error("Evaluation must not run.");
+      },
+    },
+  });
+
+  assert.deepEqual(await service.generateAndEvaluate(input), {
+    status: "DUPLICATE_SUPPRESSED",
+    fingerprint: "fingerprint",
+  });
 });
 
 test("proposal workflow maps evaluation races and missing storage", async () => {

@@ -26,6 +26,7 @@ if [[ "$*" == *"run services describe"* ]]; then echo "https://coffergate.exampl
       CLOUD_KMS_KEY_VERSION: "projects/project/locations/asia-northeast3/keyRings/ring/cryptoKeys/key/cryptoKeyVersions/1",
       OPERATIONS_WALLET_ADDRESS: "wallet", USDC_MINT: "usdc", USDC_TOKEN_ACCOUNT: "account",
       DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT: "recipient", DEVNET_PAYMENT_AMOUNT_ATOMIC: "1",
+      DEVNET_PAYMENT_DESTINATION_OWNER_ADDRESS: "recipient-wallet",
       TARGET_USDC_BALANCE: "20",
     },
   });

@@ -4,6 +4,7 @@ import {
   blockhash,
   compileTransaction,
   createTransactionMessage,
+  createNoopSigner,
   getAddressEncoder,
   getTransactionEncoder,
   pipe,
@@ -12,12 +13,13 @@ import {
   signatureBytes,
   type Transaction,
 } from "@solana/kit";
-import { getTransferCheckedInstruction } from "@solana-program/token";
+import { getCreateAssociatedTokenIdempotentInstruction, getTransferCheckedInstruction } from "@solana-program/token";
 
 export interface DevnetTokenPaymentInput {
   signerAddress: string;
   sourceTokenAccount: string;
   destinationTokenAccount: string;
+  destinationOwnerAddress: string;
   mintAddress: string;
   amountAtomic: string;
   decimals: number;
@@ -45,6 +47,12 @@ export function buildDevnetTokenPayment(
   }
 
   const signerAddress = address(input.signerAddress);
+  const createDestinationAccount = getCreateAssociatedTokenIdempotentInstruction({
+    payer: createNoopSigner(signerAddress),
+    ata: address(input.destinationTokenAccount),
+    owner: address(input.destinationOwnerAddress),
+    mint: address(input.mintAddress),
+  });
   const transfer = getTransferCheckedInstruction({
     source: address(input.sourceTokenAccount),
     mint: address(input.mintAddress),
@@ -65,8 +73,8 @@ export function buildDevnetTokenPayment(
         },
         transactionMessage,
       ),
-    (transactionMessage) =>
-      appendTransactionMessageInstruction(transfer, transactionMessage),
+    (transactionMessage) => appendTransactionMessageInstruction(createDestinationAccount, transactionMessage),
+    (transactionMessage) => appendTransactionMessageInstruction(transfer, transactionMessage),
   );
   const transaction = compileTransaction(message);
   const requiredSigners = Object.keys(transaction.signatures);

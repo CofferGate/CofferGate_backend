@@ -29,7 +29,7 @@ test("executes and reconciles one bounded Devnet payment", async () => {
     async confirmTransaction() { return { commitment: "confirmed" }; },
   }, {
     async sign(message) { return { signature: sign(null, message, privateKey), keyVersion: "kms/key/1" }; },
-  }, { signerAddress, sourceTokenAccount: source, destinationTokenAccount: destination, mintAddress: mint, amountAtomic: "1", decimals: 0 },
+  }, { signerAddress, sourceTokenAccount: source, destinationTokenAccount: destination, destinationOwnerAddress: signerAddress, mintAddress: mint, amountAtomic: "1", decimals: 0 },
   () => new Date("2026-08-02T00:01:00.000Z"));
 
   const result = await service.execute(approved.proposalId);
@@ -49,7 +49,7 @@ test("fails closed before signing when simulation fails", async () => {
     async sendTransaction() { throw new Error("must not submit"); },
     async confirmTransaction() { throw new Error("must not confirm"); },
   }, { async sign() { signCalls += 1; return { signature: Buffer.alloc(64), keyVersion: "key" }; } },
-  { signerAddress, sourceTokenAccount: source, destinationTokenAccount: destination, mintAddress: mint, amountAtomic: "1", decimals: 0 });
+  { signerAddress, sourceTokenAccount: source, destinationTokenAccount: destination, destinationOwnerAddress: signerAddress, mintAddress: mint, amountAtomic: "1", decimals: 0 });
 
   const result = await service.execute(approved.proposalId);
   assert.equal(result.status, "FAILED");

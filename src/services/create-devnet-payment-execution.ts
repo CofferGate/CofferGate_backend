@@ -9,7 +9,8 @@ export function createDevnetPaymentExecutionService(
   repository: ProposalRepository & DevnetPaymentExecutionRepository,
 ): DevnetPaymentExecutionService {
   if (!config.CLOUD_KMS_KEY_VERSION || !config.USDC_MINT || !config.USDC_TOKEN_ACCOUNT ||
-    !config.DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT || !config.DEVNET_PAYMENT_AMOUNT_ATOMIC ||
+    !config.DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT ||
+    !config.DEVNET_PAYMENT_DESTINATION_OWNER_ADDRESS || !config.DEVNET_PAYMENT_AMOUNT_ATOMIC ||
     config.OPERATIONS_WALLET_ADDRESS === "unconfigured") {
     throw new Error("Devnet payment execution configuration is incomplete.");
   }
@@ -21,6 +22,7 @@ export function createDevnetPaymentExecutionService(
       signerAddress: config.OPERATIONS_WALLET_ADDRESS,
       sourceTokenAccount: config.USDC_TOKEN_ACCOUNT,
       destinationTokenAccount: config.DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT,
+      destinationOwnerAddress: config.DEVNET_PAYMENT_DESTINATION_OWNER_ADDRESS,
       mintAddress: config.USDC_MINT,
       amountAtomic: config.DEVNET_PAYMENT_AMOUNT_ATOMIC,
       decimals: config.DEVNET_PAYMENT_DECIMALS,

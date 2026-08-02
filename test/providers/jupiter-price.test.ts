@@ -11,6 +11,7 @@ function createProvider(payload: unknown, status = 200, capture?: (request: Requ
   return new JupiterSolPriceProvider({
     apiKey: "secret-api-key",
     solMint,
+    now: () => new Date("2026-08-01T06:00:01.000Z"),
     fetch: (async (input, init) => {
       const request = new Request(input, init);
       capture?.(request);
@@ -43,12 +44,12 @@ test("Jupiter provider returns SOL price evidence", async () => {
 
   assert.deepEqual(await provider.getSolPrice(), {
     priceUsd: 147.48,
-    observedAt: "2026-08-01T06:00:00.000Z",
+    observedAt: "2026-08-01T06:00:01.000Z",
     evidenceRef: {
       id: `jupiter-price:${solMint}:348004023`,
       label: "Jupiter SOL/USD price",
       sourceType: "PRICE_FEED",
-      observedAt: "2026-08-01T06:00:00.000Z",
+      observedAt: "2026-08-01T06:00:01.000Z",
       url: `https://api.jup.ag/price/v3?ids=${solMint}`,
     },
   });

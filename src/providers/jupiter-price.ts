@@ -19,6 +19,7 @@ export interface JupiterPriceProviderOptions {
   endpoint?: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
+  now?: () => Date;
 }
 
 export class JupiterPriceError extends Error {
@@ -63,14 +64,15 @@ export class JupiterSolPriceProvider implements SolPriceProvider {
       throw new JupiterPriceError("Jupiter returned no SOL price.");
     }
 
+    const observedAt = (this.options.now ?? (() => new Date()))().toISOString();
     return {
       priceUsd: price.usdPrice,
-      observedAt: price.createdAt,
+      observedAt,
       evidenceRef: {
         id: `jupiter-price:${this.options.solMint}:${price.blockId}`,
         label: "Jupiter SOL/USD price",
         sourceType: "PRICE_FEED",
-        observedAt: price.createdAt,
+        observedAt,
         url: url.toString(),
       },
     };

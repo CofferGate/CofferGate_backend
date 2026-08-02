@@ -41,6 +41,24 @@ test("Solana RPC provider returns atomic token balances", async () => {
   });
 });
 
+test("Solana RPC provider treats a missing recipient ATA as zero before creation", async () => {
+  const provider = new SolanaRpcProvider({
+    endpoint: "https://rpc.example.test",
+    fetch: async (_input, init) => {
+      const request = JSON.parse(String(init?.body)) as { id: number };
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0",
+        error: { code: -32602, message: "Invalid param: could not find account" },
+        id: request.id,
+      }));
+    },
+  });
+  assert.deepEqual(await provider.getTokenBalanceOrZero("recipient", 6), {
+    amountAtomic: "0",
+    decimals: 6,
+  });
+});
+
 test("Solana RPC provider returns atomic native balance", async () => {
   const mock = createFetch([
     { jsonrpc: "2.0", result: { value: 1_250_000_000 }, id: 1 },

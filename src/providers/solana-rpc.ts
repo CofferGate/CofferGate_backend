@@ -147,6 +147,21 @@ export class SolanaRpcProvider {
     };
   }
 
+  async getTokenBalanceOrZero(
+    tokenAccount: string,
+    decimals: number,
+  ): Promise<SolanaTokenBalance> {
+    try {
+      return await this.getTokenBalance(tokenAccount);
+    } catch (error) {
+      if (error instanceof SolanaRpcError && error.code === -32602 &&
+        /could not find account/i.test(error.message)) {
+        return { amountAtomic: "0", decimals };
+      }
+      throw error;
+    }
+  }
+
   async getNativeBalance(
     walletAddress: string,
     commitment: "confirmed" | "finalized" = "confirmed",

@@ -25,6 +25,7 @@ if [[ "$*" == *"run services describe"* ]]; then echo "https://coffergate.exampl
       INTERNAL_TASK_TOKEN_SECRET: "internal-token", JUPITER_API_KEY_SECRET: "jupiter-key",
       CLOUD_KMS_KEY_VERSION: "projects/project/locations/asia-northeast3/keyRings/ring/cryptoKeys/key/cryptoKeyVersions/1",
       OPERATIONS_WALLET_ADDRESS: "wallet", USDC_MINT: "usdc", USDC_TOKEN_ACCOUNT: "account",
+      DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT: "recipient", DEVNET_PAYMENT_AMOUNT_ATOMIC: "1",
       TARGET_USDC_BALANCE: "20",
     },
   });

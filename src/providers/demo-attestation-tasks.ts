@@ -41,7 +41,7 @@ export class DemoAttestationTaskScheduler {
           httpRequest: {
             httpMethod: "POST",
             url: new URL(
-              `/internal/v1/demo-attestations/${encodeURIComponent(proposalId)}`,
+              `/internal/v1/devnet-payments/${encodeURIComponent(proposalId)}`,
               this.options.targetBaseUrl,
             ).toString(),
             headers: { "x-coffergate-task-token": this.options.internalTaskToken },

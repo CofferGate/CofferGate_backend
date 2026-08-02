@@ -19,7 +19,7 @@ test("demo attestation task is deterministic and authenticated", async () => {
   });
   const result = await scheduler.schedule("proposal-01");
   assert.equal(result.status, "SCHEDULED");
-  assert.match(JSON.stringify(requests[0]), /demo-attestations\/proposal-01/);
+  assert.match(JSON.stringify(requests[0]), /devnet-payments\/proposal-01/);
   assert.match(JSON.stringify(requests[0]), /tasks@example\.com/);
   assert.match(JSON.stringify(requests[0]), /internal-token/);
 });

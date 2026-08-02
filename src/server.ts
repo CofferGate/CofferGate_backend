@@ -4,7 +4,7 @@ import { createRepositories } from "./repositories/create-repositories.js";
 import { TaskTokenAuthorizer } from "./security/task-request-authorizer.js";
 import { createProposalGenerationEvaluationService } from "./services/create-proposal-generation-evaluation.js";
 import { createLiveReadinessService } from "./services/create-live-readiness-service.js";
-import { createDemoAttestationService } from "./services/create-demo-attestation.js";
+import { createDevnetPaymentExecutionService } from "./services/create-devnet-payment-execution.js";
 import { createDashboardSnapshotService } from "./services/create-dashboard-snapshot.js";
 
 const config = loadConfig();
@@ -19,7 +19,7 @@ const internalDependencies =
     ? {
         trustedProposalGenerationService:
           createProposalGenerationEvaluationService(config, repositories),
-        demoAttestationService: createDemoAttestationService(
+        devnetPaymentExecutionService: createDevnetPaymentExecutionService(
           config,
           repositories.proposalRepository,
         ),

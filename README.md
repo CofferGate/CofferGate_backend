@@ -1,17 +1,29 @@
 # CofferGate Backend — 실행 가이드
 
-이 문서는 배경지식 없이도 따라 하면서 CofferGate 백엔드를 실제로 실행하고, "AI 제안 → 정책 판정 → KMS Attestation"까지 전체 흐름을 눈으로 확인할 수 있도록 만들었습니다. 아키텍처 설명이나 전체 API 스펙 같은 참고 자료는 맨 아래 **5. 참고 자료**로 몰아 뒀습니다 — 지금은 건너뛰고 바로 실행하면 됩니다.
+이 README는 Google X Solana AI Agentic Hackathon 제출 요건인 **재현 가능한 코드 + 실행 가이드**를 충족하기 위한 문서입니다. 배경지식 없이도 CofferGate 백엔드를 실행하고, "온체인 잔고 관찰 → Vertex AI 제안 → 결정론적 정책 판정 → Cloud KMS Attestation" 흐름을 확인할 수 있도록 구성했습니다.
+
+심사 목적에 따라 아래 경로 중 하나를 선택하면 됩니다.
+
+| 목적 | 권장 경로 | 필요한 권한 |
+| --- | --- | --- |
+| 저장소 코드와 API를 가장 빠르게 재현 | **2-1 ~ 2-2** | 없음 |
+| 전체 테스트·타입·빌드 검증 | **2-4** | 없음 |
+| 현재 배포된 Devnet 통합 데모 확인 | **1번** | `coffergate-devnet` 프로젝트 접근 권한 |
+| 자신의 GCP 프로젝트에 새 환경 배포 | **3번** | GCP 프로젝트 소유자 또는 인프라 설정 권한 |
+
+> **데모 범위:** 현재 제출 버전은 Solana Devnet의 실제 지갑·토큰 잔고를 읽고, AI 제안과 정책 판정 후 Cloud KMS Ed25519 Attestation을 생성합니다. Jupiter Swap 트랜잭션을 제출하거나 자산을 이동하지 않습니다. `SIMULATED`는 거래 체결이 아니라 **정책 통과 및 서명 증명 완료**를 의미합니다.
 
 ## 0. 준비물
 
-- (1번을 따라가려면) `gcloud` CLI, `jq`, 프로젝트 접근 권한
-- (2번을 따라가려면) Node.js 20+, npm
+- 로컬 재현: Git, Node.js 20+, npm, curl
+- JSON 응답을 보기 좋게 확인: `jq`(선택)
+- 배포된 통합 데모 또는 GCP 배포: `gcloud` CLI와 해당 프로젝트 권한
 
 ---
 
-## 1. 가장 빠른 확인 — 이미 배포된 데모 그대로 실행해보기
+## 1. 배포된 Devnet 통합 데모 확인
 
-코드를 내려받지 않고도, 실제 Cloud Run에 떠 있는 서비스를 그대로 호출해서 전체 흐름을 확인하는 방법입니다.
+코드를 내려받지 않고 실제 Cloud Run 서비스와 Firestore 데이터를 확인하는 방법입니다. 백엔드는 보안을 위해 비공개 IAM 서비스로 배포되어 있으므로 `coffergate-devnet` 프로젝트 접근 권한이 필요합니다. 권한이 없다면 **2번 로컬 재현**으로 이동하세요.
 
 ### 1-1. 프록시 열기
 
@@ -32,7 +44,7 @@ gcloud run services proxy coffergate-backend \
 curl -s http://localhost:8085/api/v1/system/readiness | jq
 ```
 
-`overallStatus`가 `"healthy"`이고 `services` 7개가 모두 `"healthy"`면 정상입니다.
+`overallStatus`와 각 서비스 상태를 확인합니다. 외부 제공자 일시 장애가 있으면 `degraded` 또는 `down`이 나올 수 있으며, 이 경우 각 항목의 `impact`와 `action`을 확인합니다.
 
 ### 1-3. 지금까지 쌓인 Proposal 목록 보기
 
@@ -60,7 +72,7 @@ curl -s http://localhost:8085/api/v1/proposals/<proposalId> | jq '.data | {decis
 curl -s http://localhost:8085/api/v1/dashboard | jq
 ```
 
-여기까지가 "지금 실제로 돌아가고 있는 데모"를 확인하는 전부입니다.
+여기까지가 현재 배포된 Devnet 통합 데모 확인 절차입니다.
 
 ---
 
@@ -71,7 +83,7 @@ curl -s http://localhost:8085/api/v1/dashboard | jq
 ```bash
 git clone https://github.com/CofferGate/CofferGate_backend.git
 cd CofferGate_backend
-npm install
+npm ci
 ```
 
 ### 2-2. 가장 빠른 스모크 테스트 (메모리 모드)
@@ -88,7 +100,9 @@ curl -s http://localhost:8080/health/live
 
 `{"status":"ok"}`가 나오면 서버 자체는 정상입니다. **주의**: 기본 모드(`REPOSITORY_MODE=memory`)에서는 Proposal 생성 API(`/internal/v1/*`)가 아예 등록되지 않습니다. AI 제안·정책 판정·Attestation까지 이어지는 실제 데모 흐름을 로컬에서 보려면 아래 2-3 단계가 필요합니다.
 
-### 2-3. 로컬에서 전체 데모 흐름 재현하기 (Firestore 연동)
+### 2-3. 팀 GCP 환경과 연결해 전체 흐름 재현하기
+
+이 단계는 Firestore, Vertex AI, Jupiter, Solana RPC, Cloud Tasks, Cloud KMS를 실제로 호출하므로 GCP 프로젝트 권한과 이미 준비된 클라우드 리소스가 필요합니다. 저장소만으로 동작을 검증하려면 2-4의 자동 테스트를 사용하세요.
 
 **1) 런타임 서비스 계정으로 로그인** — 실제 배포와 동일한 IAM 경로를 그대로 씁니다.
 
@@ -101,6 +115,8 @@ gcloud auth application-default login \
 
 ```bash
 export REPOSITORY_MODE=firestore
+export DATA_MODE=live
+export ENVIRONMENT=devnet
 export GOOGLE_CLOUD_PROJECT=<project-id>
 export OPERATIONS_WALLET_ADDRESS=<wallet-address>
 export USDC_MINT=<usdc-mint>
@@ -108,12 +124,16 @@ export USDC_TOKEN_ACCOUNT=<usdc-token-account>
 export TARGET_USDC_BALANCE=20
 export JUPITER_API_KEY=<jupiter-api-key>
 export CLOUD_KMS_KEY_VERSION=projects/<project-id>/locations/asia-northeast3/keyRings/coffergate/cryptoKeys/demo-attestation/cryptoKeyVersions/1
-export INTERNAL_TASK_TOKEN=$(openssl rand -hex 32)
+export INTERNAL_TASK_TOKEN=$(gcloud secrets versions access latest \
+  --secret=coffergate-internal-task-token \
+  --project=<project-id>)
 export CLOUD_TASKS_LOCATION=asia-northeast3
 export CLOUD_TASKS_QUEUE=demo-attestation
-export CLOUD_TASKS_TARGET_BASE_URL=http://localhost:8080
+export CLOUD_TASKS_TARGET_BASE_URL=<deployed-cloud-run-service-url>
 export CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL=<tasks-sa>@<project-id>.iam.gserviceaccount.com
 ```
+
+로컬에서 생성한 Cloud Tasks 요청을 배포 서비스가 검증해야 하므로 `INTERNAL_TASK_TOKEN`은 배포 서비스와 동일한 Secret 값을 사용합니다. 이 값은 백엔드 운영 전용이며 프론트엔드, 브라우저, Git 저장소에 저장하지 않습니다.
 
 **3) 정책 시딩** (최초 1회)
 
@@ -130,35 +150,53 @@ npm run dev
 **5) 새 터미널에서 Proposal 생성을 직접 트리거**
 
 ```bash
+PROPOSAL_ID="manual-test-$(date +%s)"
+
 curl -s -X POST http://localhost:8080/internal/v1/proposals/generate \
   -H "content-type: application/json" \
   -H "x-coffergate-task-token: $INTERNAL_TASK_TOKEN" \
-  -d '{"proposalId":"manual-test-001"}' | jq
+  -d "{\"proposalId\":\"$PROPOSAL_ID\"}" | jq
 ```
 
-응답의 `decision`(AUTO/BLOCK)과 `ruleChecks`로 어떤 규칙이 통과·실패했는지 바로 보입니다.
+응답의 `decision`(AUTO/BLOCK)과 `ruleChecks`로 어떤 규칙이 통과·실패했는지 바로 볼 수 있습니다. AUTO SWAP이면 Cloud Tasks가 같은 Firestore를 사용하는 배포 서비스의 Attestation 엔드포인트를 호출합니다.
 
-**6) AUTO로 판정됐다면 Attestation을 수동으로 트리거** — 로컬 환경은 Cloud Tasks가 콜백할 수 없으므로 직접 호출합니다.
+**6) Attestation 결과 확인**
 
 ```bash
-curl -s -X POST http://localhost:8080/internal/v1/demo-attestations/manual-test-001 \
-  -H "x-coffergate-task-token: $INTERNAL_TASK_TOKEN" | jq
+sleep 10
+curl -s "http://localhost:8080/api/v1/proposals/$PROPOSAL_ID" \
+  | jq '.data | {decision, status, execution}'
 ```
 
-`attestationSignature`가 채워진 응답이 오면 성공입니다.
+`status: "SIMULATED"`와 `execution.attestationSignature`가 채워지면 성공입니다. Cloud Tasks가 로컬호스트를 호출할 수 없으므로 `CLOUD_TASKS_TARGET_BASE_URL`에는 `localhost`가 아닌 접근 가능한 HTTPS Cloud Run URL을 사용해야 합니다.
 
 ### 2-4. 테스트 실행
 
 ```bash
 npm run typecheck
 npm test
+npm run build
 ```
+
+현재 기준으로 typecheck, 104개 테스트, TypeScript build가 모두 통과해야 합니다.
 
 ---
 
-## 3. 새로 배포하기 (인프라를 처음부터 만들 때만)
+## 3. 자신의 GCP 프로젝트에 배포하기
 
-이미 떠 있는 서비스를 쓸 거라면 이 단계는 건너뛰어도 됩니다.
+이미 떠 있는 팀 서비스를 쓸 거라면 이 단계는 건너뛰어도 됩니다. 아래 스크립트 실행 전 다음 리소스가 준비되어 있어야 합니다.
+
+- Billing이 연결된 GCP 프로젝트
+- 활성화된 Cloud Run, Cloud Build, Artifact Registry, Firestore, Vertex AI, Cloud Tasks, Cloud Scheduler, Cloud KMS, Secret Manager API
+- Docker Artifact Registry 저장소
+- Native mode Firestore 데이터베이스
+- Ed25519 Cloud KMS 키 버전
+- Cloud Run 런타임·Cloud Tasks·Cloud Scheduler 서비스 계정
+- Cloud Tasks 큐
+- `coffergate-internal-task-token`, `coffergate-jupiter-api-key` Secret
+- Devnet 운영 지갑 주소, 데모 토큰 Mint, 해당 토큰 계정
+
+배포 스크립트는 런타임 서비스 계정의 Secret 접근, Cloud Tasks 큐잉, KMS 서명, Cloud Run 호출 권한을 최소 범위로 연결합니다.
 
 ```bash
 # 1) 이미지 빌드
@@ -219,7 +257,7 @@ Secret Manager 값에 트레일링 줄바꿈이 들어가면 바이트 길이가
 `policies/current` 문서가 없으면 `POLICY_CONFIGURED` 규칙이 무조건 FAIL입니다. `node scripts/seed-policy.mjs`를 실행했는지 확인하세요.
 
 **로컬(2-3단계)에서 AUTO 판정 후 `SIMULATED`로 안 바뀜**
-로컬은 Cloud Tasks 콜백을 받을 수 없습니다. 2-3단계 6번처럼 `/internal/v1/demo-attestations/:proposalId`를 수동으로 호출해야 합니다.
+Cloud Tasks는 로컬호스트를 호출할 수 없습니다. `CLOUD_TASKS_TARGET_BASE_URL`이 같은 Firestore와 KMS 설정을 사용하는 HTTPS Cloud Run URL인지, Tasks 서비스 계정에 해당 서비스의 `roles/run.invoker`가 있는지 확인하세요.
 
 **`/api/v1/dashboard`의 `balances`가 비어 있음**
 `OPERATIONS_WALLET_ADDRESS`/`USDC_MINT`/`USDC_TOKEN_ACCOUNT` 값과 Devnet RPC 연결을 확인하세요. 로그의 `dashboard.wallet_state.failed` 이벤트로 원인을 볼 수 있습니다.
@@ -348,7 +386,9 @@ Policy 문서 스키마(`src/contracts/policy.ts`)에는 `minimumReserve`, `maxS
 | 런타임 SA(`coffergate-backend`) | Cloud Run 서비스 자체 | Firestore 읽기/쓰기, Vertex AI 호출, Cloud Tasks 큐잉, Cloud KMS 서명, Secret Manager 접근 |
 | Cloud Tasks SA | Attestation 트리거 | 대상 Cloud Run `run.invoker`만 |
 | Cloud Scheduler SA | 5분 주기 Proposal 생성 트리거 | 대상 Cloud Run `run.invoker`만 |
-| 프론트엔드 런타임 SA | 프론트엔드 ID Token 발급 | 대상 Cloud Run `run.invoker`, 내부 Task Token Secret `secretAccessor`(로컬 개발용) |
+| 프론트엔드 런타임 SA | 프론트 서버에서 백엔드 조회 API 호출 | 대상 Cloud Run `run.invoker`만 |
+
+내부 Task Token Secret은 런타임 백엔드와 Scheduler 배포 과정에서만 사용합니다. 프론트엔드 서비스 계정과 브라우저에는 접근 권한을 부여하지 않습니다.
 
 ### 5-6. 테스트 커버리지
 

@@ -18,6 +18,7 @@ interface PaymentRepository extends DevnetPaymentExecutionRepository {
 
 export interface DevnetPaymentRpc {
   getTokenBalance(tokenAccount: string): Promise<{ amountAtomic: string; decimals: number }>;
+  getTokenBalanceOrZero(tokenAccount: string, decimals: number): Promise<{ amountAtomic: string; decimals: number }>;
   getLatestBlockhash(): Promise<{ blockhash: string; lastValidBlockHeight: number; slot: number }>;
   simulateTransaction(transaction: Buffer): Promise<{
     ok: boolean;
@@ -66,7 +67,10 @@ export class DevnetPaymentExecutionService {
 
     const proposal = claim.proposal;
     try {
-      const before = await this.rpc.getTokenBalance(this.options.destinationTokenAccount);
+      const before = await this.rpc.getTokenBalanceOrZero(
+        this.options.destinationTokenAccount,
+        this.options.decimals,
+      );
       if (before.decimals !== this.options.decimals) {
         throw new Error("Destination token decimals do not match the configured payment mint.");
       }

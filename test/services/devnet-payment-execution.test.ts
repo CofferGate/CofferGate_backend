@@ -23,6 +23,7 @@ test("executes and reconciles one bounded Devnet payment", async () => {
   let balanceCalls = 0;
   const service = new DevnetPaymentExecutionService(repository, {
     async getTokenBalance() { return { amountAtomic: balanceCalls++ === 0 ? "10" : "11", decimals: 0 }; },
+    async getTokenBalanceOrZero() { return { amountAtomic: balanceCalls++ === 0 ? "10" : "11", decimals: 0 }; },
     async getLatestBlockhash() { return { blockhash: "11111111111111111111111111111111", lastValidBlockHeight: 20, slot: 1 }; },
     async simulateTransaction() { return { ok: true, unitsConsumed: 123 }; },
     async sendTransaction(transaction) { return getSignatureFromTransaction(getTransactionDecoder().decode(transaction)); },
@@ -44,6 +45,7 @@ test("fails closed before signing when simulation fails", async () => {
   let signCalls = 0;
   const service = new DevnetPaymentExecutionService(repository, {
     async getTokenBalance() { return { amountAtomic: "10", decimals: 0 }; },
+    async getTokenBalanceOrZero() { return { amountAtomic: "10", decimals: 0 }; },
     async getLatestBlockhash() { return { blockhash: "11111111111111111111111111111111", lastValidBlockHeight: 20, slot: 1 }; },
     async simulateTransaction() { return { ok: false }; },
     async sendTransaction() { throw new Error("must not submit"); },

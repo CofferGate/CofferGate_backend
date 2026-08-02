@@ -6,6 +6,7 @@ import {
   InMemoryProposalRepository,
   type ProposalRepository,
 } from "../../src/repositories/proposal-repository.js";
+import { InMemoryProposalSuppressionRepository } from "../../src/repositories/proposal-suppression-repository.js";
 import { ProposalGenerationService } from "../../src/services/proposal-generation.js";
 
 const input: VertexProposalGenerationInput = {
@@ -45,6 +46,9 @@ function createService(
 ) {
   return new ProposalGenerationService({
     proposalRepository: repository,
+    proposalSuppressionRepository: new InMemoryProposalSuppressionRepository(),
+    duplicateCooldownSeconds: 1_800,
+    now: () => new Date("2026-08-01T06:00:00.000Z"),
     proposalGenerator: {
       async generate() {
         return generatedProposal;
@@ -94,6 +98,31 @@ test("proposal generation reports immutable ID conflicts", async () => {
     await createService(repository, conflictingProposal).generate(input),
     { status: "ID_CONFLICT" },
   );
+});
+
+test("proposal generation suppresses an equivalent proposal during cooldown", async () => {
+  const repository = new InMemoryProposalRepository();
+  const suppressionRepository = new InMemoryProposalSuppressionRepository();
+  const firstService = new ProposalGenerationService({
+    proposalRepository: repository,
+    proposalSuppressionRepository: suppressionRepository,
+    duplicateCooldownSeconds: 1_800,
+    now: () => new Date("2026-08-01T06:00:00.000Z"),
+    proposalGenerator: { async generate() { return proposal; } },
+  });
+  const duplicate = { ...proposal, proposalId: "proposal_02" };
+  const secondService = new ProposalGenerationService({
+    proposalRepository: repository,
+    proposalSuppressionRepository: suppressionRepository,
+    duplicateCooldownSeconds: 1_800,
+    now: () => new Date("2026-08-01T06:05:00.000Z"),
+    proposalGenerator: { async generate() { return duplicate; } },
+  });
+
+  assert.equal((await firstService.generate(input)).status, "CREATED");
+  const result = await secondService.generate({ ...input, proposalId: "proposal_02" });
+  assert.equal(result.status, "DUPLICATE_SUPPRESSED");
+  assert.equal(await repository.findById("proposal_02"), null);
 });
 
 test("proposal generation reports inconsistent idempotency storage", async () => {

@@ -36,6 +36,11 @@ const configSchema = z.object({
   DEVNET_PAYMENT_DECIMALS: z.coerce.number().int().min(0).max(18).default(6),
   TARGET_USDC_BALANCE: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
   PROPOSAL_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  PROPOSAL_DUPLICATE_COOLDOWN_SECONDS: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(1_800),
   JUPITER_API_KEY: z.string().min(1).optional(),
   JUPITER_PRICE_API_URL: z.url().default("https://api.jup.ag/price/v3"),
   JUPITER_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
@@ -56,6 +61,10 @@ const configSchema = z.object({
   VERTEX_AI_MODEL: z.string().min(1).default("gemini-2.5-flash"),
   FIRESTORE_DATABASE_ID: z.string().min(1).default("(default)"),
   FIRESTORE_PROPOSALS_COLLECTION: z.string().min(1).default("proposals"),
+  FIRESTORE_PROPOSAL_SUPPRESSIONS_COLLECTION: z
+    .string()
+    .min(1)
+    .default("proposalSuppressions"),
   FIRESTORE_POLICIES_COLLECTION: z.string().min(1).default("policies"),
   FIRESTORE_CURRENT_POLICY_DOCUMENT: z.string().min(1).default("current"),
   FIRESTORE_DAILY_USAGE_COLLECTION: z.string().min(1).default("dailyUsage"),

@@ -28,6 +28,7 @@ export interface ProposalGenerationEvaluationDependencies {
 export type ProposalGenerationEvaluationResult =
   | { status: "EVALUATED"; proposal: Proposal }
   | { status: "ALREADY_PROCESSED"; proposal: Proposal }
+  | { status: "DUPLICATE_SUPPRESSED"; fingerprint: string }
   | { status: "ID_CONFLICT" }
   | { status: "PERSISTENCE_INCONSISTENCY" }
   | { status: "CONFLICT" };
@@ -49,6 +50,9 @@ export class ProposalGenerationEvaluationService {
     }
     if (generationResult.status === "PERSISTENCE_INCONSISTENCY") {
       return { status: "PERSISTENCE_INCONSISTENCY" };
+    }
+    if (generationResult.status === "DUPLICATE_SUPPRESSED") {
+      return generationResult;
     }
     if (generationResult.proposal.status !== "AI_REVIEWED") {
       return {

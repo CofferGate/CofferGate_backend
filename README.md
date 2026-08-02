@@ -55,7 +55,7 @@ curl -s http://localhost:8085/api/v1/system/readiness | jq
 curl -s http://localhost:8085/api/v1/proposals | jq '.data[] | {proposalId, action, decision, status}'
 ```
 
-Cloud Scheduler가 5분마다 Proposal을 생성합니다. `decision: "AUTO"`의 정상 완료 상태는 `RECONCILED`, 정책 위반은 `BLOCKED`, 외부 실행 실패는 `FAILED`입니다. 잔고가 이미 목표 이상이면 정상적으로 `NO_ACTION` Proposal이 생성될 수 있습니다.
+Cloud Scheduler가 15분마다 Proposal 생성을 시도합니다. 동일한 실행 조건은 30분 cooldown 동안 중복 저장하지 않습니다. `decision: "AUTO"`의 정상 완료 상태는 `RECONCILED`, 정책 위반은 `BLOCKED`, 외부 실행 실패는 `FAILED`입니다. 잔고가 이미 목표 이상이면 정상적으로 `NO_ACTION` Proposal이 생성될 수 있습니다.
 
 ### 1-4. Proposal 하나를 자세히 보기 — 실행·정산 확인
 
@@ -242,14 +242,14 @@ DEVNET_PAYMENT_DECIMALS='6' \
 PROJECT_ID='<project-id>' REGION='asia-northeast3' SERVICE_NAME='coffergate-backend' \
 ./scripts/verify-devnet-runtime.sh
 
-# 4) 5분 주기 자동 Proposal 생성 스케줄러 등록
+# 4) 15분 주기 자동 Proposal 생성 스케줄러 등록
 PROJECT_ID='<project-id>' \
 REGION='asia-northeast3' \
 SERVICE_NAME='coffergate-backend' \
 SCHEDULER_JOB_NAME='coffergate-proposal-generation' \
 SCHEDULER_SERVICE_ACCOUNT='<scheduler-sa>@<project-id>.iam.gserviceaccount.com' \
 INTERNAL_TASK_TOKEN_SECRET='coffergate-internal-task-token' \
-SCHEDULER_CRON='*/5 * * * *' \
+SCHEDULER_CRON='*/15 * * * *' \
 SCHEDULER_TIME_ZONE='Etc/UTC' \
 ./scripts/deploy-scheduler.sh
 
@@ -293,7 +293,7 @@ Cloud Tasks는 로컬호스트를 호출할 수 없습니다. `CLOUD_TASKS_TARGE
 CofferGate는 Node.js 24 + TypeScript + Fastify로 작성된 **단일 Cloud Run 서비스**입니다. "Control Plane"과 "Private Executor"를 분리했던 초기 설계는 폐기되었고, AI 제안·정책 판정·Devnet 결제 트리거가 모두 같은 프로세스 안에서 이루어집니다.
 
 ```
-Cloud Scheduler (5분 주기)
+Cloud Scheduler (15분 주기)
    │ OIDC + x-coffergate-task-token
    ▼
 Cloud Run: coffergate-backend (단일 Fastify 서비스)
@@ -332,6 +332,7 @@ Cloud Run: coffergate-backend (단일 Fastify 서비스)
 | `DEVNET_PAYMENT_AMOUNT_ATOMIC` | — | ✅ | 고정 데모 전송량(atomic) |
 | `DEVNET_PAYMENT_DECIMALS` | `6` | | 데모 Mint decimals |
 | `PROPOSAL_TTL_SECONDS` | `300` | | Proposal 만료 시간(초) |
+| `PROPOSAL_DUPLICATE_COOLDOWN_SECONDS` | `1800` | | 동일 실행 조건 중복 억제 시간(초) |
 | `JUPITER_API_KEY` | — | ✅ | Jupiter Price API 키 |
 | `JUPITER_PRICE_API_URL` | `https://api.jup.ag/price/v3` | | Jupiter 가격 조회 엔드포인트 |
 | `JUPITER_TIMEOUT_MS` | `5000` | | Jupiter 요청 타임아웃(ms) |
@@ -347,6 +348,7 @@ Cloud Run: coffergate-backend (단일 Fastify 서비스)
 | `VERTEX_AI_MODEL` | `gemini-2.5-flash` | | 사용 모델 |
 | `FIRESTORE_DATABASE_ID` | `(default)` | | Firestore 데이터베이스 ID |
 | `FIRESTORE_PROPOSALS_COLLECTION` | `proposals` | | Proposal 컬렉션명 |
+| `FIRESTORE_PROPOSAL_SUPPRESSIONS_COLLECTION` | `proposalSuppressions` | | Proposal cooldown 컬렉션명 |
 | `FIRESTORE_POLICIES_COLLECTION` | `policies` | | Policy 컬렉션명 |
 | `FIRESTORE_CURRENT_POLICY_DOCUMENT` | `current` | | 현재 Policy 문서 ID |
 | `FIRESTORE_DAILY_USAGE_COLLECTION` | `dailyUsage` | | 일일 사용량 컬렉션명 |
@@ -406,7 +408,7 @@ Policy 문서 스키마(`src/contracts/policy.ts`)에는 `minimumReserve`, `maxS
 | --- | --- | --- |
 | 런타임 SA(`coffergate-backend`) | Cloud Run 서비스 자체 | Firestore 읽기/쓰기, Vertex AI 호출, Cloud Tasks 큐잉, Cloud KMS 서명, Secret Manager 접근 |
 | Cloud Tasks SA | Devnet 결제 트리거 | 대상 Cloud Run `run.invoker`만 |
-| Cloud Scheduler SA | 5분 주기 Proposal 생성 트리거 | 대상 Cloud Run `run.invoker`만 |
+| Cloud Scheduler SA | 15분 주기 Proposal 생성 트리거 | 대상 Cloud Run `run.invoker`만 |
 | 프론트엔드 런타임 SA | 프론트 서버에서 백엔드 조회 API 호출 | 대상 Cloud Run `run.invoker`만 |
 
 내부 Task Token Secret은 런타임 백엔드와 Scheduler 배포 과정에서만 사용합니다. 프론트엔드 서비스 계정과 브라우저에는 접근 권한을 부여하지 않습니다.

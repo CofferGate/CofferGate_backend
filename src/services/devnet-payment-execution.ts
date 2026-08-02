@@ -39,6 +39,7 @@ export interface DevnetPaymentExecutionOptions {
   signerAddress: string;
   sourceTokenAccount: string;
   destinationTokenAccount: string;
+  destinationOwnerAddress: string;
   mintAddress: string;
   amountAtomic: string;
   decimals: number;

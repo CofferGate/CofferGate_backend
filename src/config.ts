@@ -14,6 +14,7 @@ const liveFirestoreRequirements = [
   "CLOUD_TASKS_TARGET_BASE_URL",
   "CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL",
   "DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT",
+  "DEVNET_PAYMENT_DESTINATION_OWNER_ADDRESS",
   "DEVNET_PAYMENT_AMOUNT_ATOMIC",
 ] as const;
 
@@ -30,6 +31,7 @@ const configSchema = z.object({
   USDC_MINT: z.string().min(1).optional(),
   USDC_TOKEN_ACCOUNT: z.string().min(1).optional(),
   DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT: z.string().min(1).optional(),
+  DEVNET_PAYMENT_DESTINATION_OWNER_ADDRESS: z.string().min(1).optional(),
   DEVNET_PAYMENT_AMOUNT_ATOMIC: z.string().regex(/^[1-9]\d*$/).optional(),
   DEVNET_PAYMENT_DECIMALS: z.coerce.number().int().min(0).max(18).default(6),
   TARGET_USDC_BALANCE: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),

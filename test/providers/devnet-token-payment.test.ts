@@ -10,6 +10,7 @@ const payment = {
   signerAddress: "HagEUkB4BY95ndDkiGmfQEDrATmuow6UwEehsriqAsDZ",
   sourceTokenAccount: "5cB6k64vh1VvBxd6q4tYYLoi1o5gH2ecSi9LKBuLzAiq",
   destinationTokenAccount: "4Nd1mYbN4JrJ7fFWVQxZFKJysXcXGkqYqVUgVd1G7GmA",
+  destinationOwnerAddress: "C56cDPCV4Tv7QFMQpnTLPm9ArYcKZLKjdHkaJ6ioEboM",
   mintAddress: "AYneHfKF7XxhEM3EXdk7EykSPzjfc58bRSotwkECXntQ",
   amountAtomic: "10000",
   decimals: 6,

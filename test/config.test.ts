@@ -64,6 +64,7 @@ test("configuration accepts complete live Firestore runtimes", () => {
     CLOUD_TASKS_TARGET_BASE_URL: "https://coffergate.example.com",
     CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL: "tasks@coffergate-devnet.iam.gserviceaccount.com",
     DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT: "recipient-token-account",
+    DEVNET_PAYMENT_DESTINATION_OWNER_ADDRESS: "recipient-wallet",
     DEVNET_PAYMENT_AMOUNT_ATOMIC: "1",
   });
 

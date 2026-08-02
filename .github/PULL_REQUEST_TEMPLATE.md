@@ -1,35 +1,21 @@
-## Summary
+## 변경 이유
 
-<!-- 무엇을 변경했는지 2~4줄로 설명합니다. -->
+<!-- 이 작업이 필요한 배경과 달성하려는 목적을 작성합니다. -->
 
-## Related Issue
+## 변경 내용
 
-Closes #
+<!-- 리뷰어가 확인해야 할 구현·설정·API·schema 변경을 구체적으로 작성합니다. -->
 
-## Changes
+-
 
-- 
+## 검증
 
-## Validation
+<!-- 실행한 테스트, lint, type check, build 및 수동 검증 결과를 작성합니다. -->
 
-- [ ] Unit tests
-- [ ] Integration or contract tests
-- [ ] Lint and type check
-- [ ] Manual verification
+-
 
-검증 명령 또는 결과:
+## 영향 및 위험
 
-```text
+<!-- 호환성, 보안 경계, 운영 영향, 후속 작업과 아직 연결되지 않은 외부 의존성을 작성합니다. -->
 
-```
-
-## Security and Safety
-
-- [ ] 비밀정보, 개인키, API 키, 실제 자격증명이 포함되지 않았습니다.
-- [ ] 정책·서명·실행 경계를 약화하지 않습니다.
-- [ ] 실패, 만료, 중복 또는 BLOCK 경로를 확인했습니다.
-- [ ] API 또는 schema 변경을 관련 저장소와 동기화했습니다.
-
-## Notes
-
-<!-- 알려진 제한이나 후속 작업이 있다면 기록합니다. -->
+-

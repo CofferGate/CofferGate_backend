@@ -221,3 +221,52 @@ test("Solana RPC provider rejects a mismatched submission signature", async () =
     /mismatched transaction signature/,
   );
 });
+
+test("Solana RPC provider waits for confirmed transaction status", async () => {
+  const methods: string[] = [];
+  let statusCalls = 0;
+  const provider = new SolanaRpcProvider({
+    endpoint: "https://rpc.example.test",
+    sleep: async () => {},
+    fetch: async (_input, init) => {
+      const request = JSON.parse(String(init?.body)) as { id: number; method: string };
+      methods.push(request.method);
+      if (request.method === "getSignatureStatuses") {
+        statusCalls += 1;
+        return new Response(JSON.stringify({
+          jsonrpc: "2.0", id: request.id,
+          result: { value: [statusCalls === 1 ? null : { confirmationStatus: "confirmed", err: null }] },
+        }));
+      }
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: 10 }));
+    },
+  });
+
+  assert.deepEqual(await provider.confirmTransaction("signature", 20), { commitment: "confirmed" });
+  assert.deepEqual(methods, ["getSignatureStatuses", "getBlockHeight", "getSignatureStatuses"]);
+});
+
+test("Solana RPC provider rejects failed and expired transactions", async () => {
+  const failed = new SolanaRpcProvider({
+    endpoint: "https://rpc.example.test",
+    fetch: async (_input, init) => {
+      const request = JSON.parse(String(init?.body)) as { id: number };
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0", id: request.id,
+        result: { value: [{ confirmationStatus: "confirmed", err: { InstructionError: [0, "Custom"] } }] },
+      }));
+    },
+  });
+  await assert.rejects(() => failed.confirmTransaction("signature", 20), /failed during confirmation/);
+
+  const expired = new SolanaRpcProvider({
+    endpoint: "https://rpc.example.test",
+    sleep: async () => {},
+    fetch: async (_input, init) => {
+      const request = JSON.parse(String(init?.body)) as { id: number; method: string };
+      const result = request.method === "getSignatureStatuses" ? { value: [null] } : 21;
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }));
+    },
+  });
+  await assert.rejects(() => expired.confirmTransaction("signature", 20), /expired/);
+});

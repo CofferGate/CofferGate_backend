@@ -16,20 +16,23 @@
 ## 0. 준비물
 
 - 로컬 재현: Git, Node.js 24+, npm, curl
-- JSON 응답을 보기 좋게 확인: `jq`(선택)
+- JSON 응답을 보기 좋게 확인: `jq`(선택, 없다면 예시 명령의 `| jq ...` 부분 생략)
 - 배포된 통합 데모 또는 GCP 배포: `gcloud` CLI와 해당 프로젝트 권한
 
 ---
 
 ## 1. 배포된 Devnet 통합 데모 확인
 
-코드를 내려받지 않고 실제 Cloud Run 서비스와 Firestore 데이터를 확인하는 방법입니다. 백엔드는 보안을 위해 비공개 IAM 서비스로 배포되어 있으므로 `coffergate-devnet` 프로젝트 접근 권한이 필요합니다. 권한이 없다면 **2번 로컬 재현**으로 이동하세요.
+코드를 내려받지 않고 실제 Cloud Run 서비스와 Firestore 데이터를 확인하는 방법입니다. 백엔드는 보안을 위해 비공개 IAM 서비스로 배포되어 있으므로 `coffergate-devnet` 프로젝트의 Cloud Run 호출 권한(`roles/run.invoker`)이 필요합니다. 권한이 없다면 **2번 로컬 재현**으로 이동하세요.
 
 ### 1-1. 프록시 열기
 
 터미널 하나를 열어 아래 명령을 실행하고 그대로 둡니다(창을 닫지 마세요).
 
 ```bash
+gcloud auth login
+gcloud config set project coffergate-devnet
+
 gcloud run services proxy coffergate-backend \
   --project=coffergate-devnet \
   --region=asia-northeast3 \
@@ -52,7 +55,7 @@ curl -s http://localhost:8085/api/v1/system/readiness | jq
 curl -s http://localhost:8085/api/v1/proposals | jq '.data[] | {proposalId, action, decision, status}'
 ```
 
-Cloud Scheduler가 5분마다 Proposal을 생성합니다. `decision` `AUTO`의 정상 완료 상태는 `RECONCILED`, 정책 위반은 `BLOCKED`, 외부 실행 실패는 `FAILED`입니다.
+Cloud Scheduler가 5분마다 Proposal을 생성합니다. `decision: "AUTO"`의 정상 완료 상태는 `RECONCILED`, 정책 위반은 `BLOCKED`, 외부 실행 실패는 `FAILED`입니다. 잔고가 이미 목표 이상이면 정상적으로 `NO_ACTION` Proposal이 생성될 수 있습니다.
 
 ### 1-4. Proposal 하나를 자세히 보기 — 실행·정산 확인
 
@@ -168,12 +171,14 @@ curl -s -X POST http://localhost:8080/internal/v1/proposals/generate \
 **6) Devnet 결제 결과 확인**
 
 ```bash
-sleep 10
-curl -s "http://localhost:8080/api/v1/proposals/$PROPOSAL_ID" \
-  | jq '.data | {decision, status, execution}'
+for attempt in {1..12}; do
+  curl -s "http://localhost:8080/api/v1/proposals/$PROPOSAL_ID" \
+    | jq '.data | {decision, status, execution}'
+  sleep 5
+done
 ```
 
-`status: "RECONCILED"`, `execution.commitment: "confirmed"`, `execution.reconciliation.status: "MATCHED"`면 성공입니다. `transactionSignature`는 Solana Explorer에서 Devnet 거래로 확인할 수 있습니다.
+최대 60초 동안 확인하며 `status: "RECONCILED"`, `execution.commitment: "confirmed"`, `execution.reconciliation.status: "MATCHED"`가 나오면 성공입니다. `transactionSignature`는 Solana Explorer에서 Devnet 거래로 확인할 수 있습니다. `NO_ACTION` 또는 `BLOCKED`는 오류가 아니라 관찰 데이터와 정책에 따른 정상 결과입니다.
 
 ### 2-4. 테스트 실행
 
@@ -206,8 +211,11 @@ npm run build
 ```bash
 # 1) 이미지 빌드
 gcloud builds submit \
+  --project=<project-id> \
   --region=asia-northeast3 \
   --substitutions=_REGION=asia-northeast3,_ARTIFACT_REPOSITORY=coffergate,_SERVICE_NAME=coffergate-backend
+
+# 출력된 Build ID를 아래 IMAGE_URI의 <build-id>에 사용
 
 # 2) Cloud Run 배포 + IAM (Runtime SA·Tasks SA·두 Secret은 사전에 생성돼 있어야 함)
 PROJECT_ID='<project-id>' \
@@ -224,9 +232,13 @@ OPERATIONS_WALLET_ADDRESS='<solana-public-key>' \
 USDC_MINT='<usdc-mint>' \
 USDC_TOKEN_ACCOUNT='<usdc-token-account>' \
 TARGET_USDC_BALANCE='20' \
+DEVNET_PAYMENT_DESTINATION_OWNER_ADDRESS='<recipient-wallet-address>' \
+DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT='<recipient-associated-token-account>' \
+DEVNET_PAYMENT_AMOUNT_ATOMIC='1000000' \
+DEVNET_PAYMENT_DECIMALS='6' \
 ./scripts/deploy-runtime.sh
 
-# 3) 배포 검증 (실제 자금 이동 없이 IAM·Liveness·Readiness 확인)
+# 3) 배포 검증 (트랜잭션을 만들지 않고 IAM·Liveness·Readiness만 확인)
 PROJECT_ID='<project-id>' REGION='asia-northeast3' SERVICE_NAME='coffergate-backend' \
 ./scripts/verify-devnet-runtime.sh
 
@@ -401,7 +413,7 @@ Policy 문서 스키마(`src/contracts/policy.ts`)에는 `minimumReserve`, `maxS
 
 ### 5-6. 테스트 커버리지
 
-`node:test` 기반 120개 자동 테스트로 Policy Gate, Zod 계약, Firestore 원자적 claim, Devnet transaction 생성·simulation·KMS 서명·confirmation·reconciliation, 내부 인증, API, 배포 스크립트를 검증합니다.
+`node:test` 기반 121개 자동 테스트로 Policy Gate, Zod 계약, Firestore 원자적 claim, Devnet transaction 생성·simulation·KMS 서명·confirmation·reconciliation, 내부 인증, API, 배포 스크립트를 검증합니다.
 
 ### 5-7. 프로젝트 구조
 

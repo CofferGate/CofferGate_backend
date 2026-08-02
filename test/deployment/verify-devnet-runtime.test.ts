@@ -5,11 +5,13 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-function run(readinessStatus = "healthy") {
+function run(readinessStatus = "healthy", rejectAudience = false) {
   const directory = mkdtempSync(join(tmpdir(), "coffergate-smoke-"));
   writeFileSync(join(directory, "gcloud"), `#!/usr/bin/env bash
 if [[ "$*" == *"run services describe"* ]]; then echo "https://coffergate.example.run.app";
-elif [[ "$*" == *"auth print-identity-token"* ]]; then echo "identity-token";
+elif [[ "$*" == *"auth print-identity-token"* ]]; then
+  if [[ "${rejectAudience ? "$*" : ""}" == *"--audiences="* ]]; then exit 1; fi
+  echo "identity-token";
 elif [[ "$*" == *"get-iam-policy"* ]]; then echo '{"bindings":[{"members":["serviceAccount:tasks@example.com"]}]}' ; fi
 `);
   writeFileSync(join(directory, "curl"), `#!/usr/bin/env bash
@@ -29,6 +31,12 @@ else echo '{"data":{"overallStatus":"${readinessStatus}","dataMode":"live","netw
 
 test("Devnet smoke test verifies IAM, liveness, and readiness", () => {
   const result = run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /passed IAM, liveness, and readiness checks/);
+});
+
+test("Devnet smoke test supports user account identity tokens", () => {
+  const result = run("healthy", true);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /passed IAM, liveness, and readiness checks/);
 });

@@ -15,7 +15,7 @@
 
 ## 0. 준비물
 
-- 로컬 재현: Git, Node.js 20+, npm, curl
+- 로컬 재현: Git, Node.js 24+, npm, curl
 - JSON 응답을 보기 좋게 확인: `jq`(선택)
 - 배포된 통합 데모 또는 GCP 배포: `gcloud` CLI와 해당 프로젝트 권한
 
@@ -273,7 +273,7 @@ Cloud Tasks는 로컬호스트를 호출할 수 없습니다. `CLOUD_TASKS_TARGE
 
 ### 5-1. 아키텍처 요약
 
-CofferGate는 Node.js 20 + TypeScript + Fastify로 작성된 **단일 Cloud Run 서비스**입니다. "Control Plane"과 "Private Executor"를 분리했던 초기 설계는 폐기되었고, AI 제안·정책 판정·Attestation 트리거가 모두 같은 프로세스 안에서 이루어집니다.
+CofferGate는 Node.js 24 + TypeScript + Fastify로 작성된 **단일 Cloud Run 서비스**입니다. "Control Plane"과 "Private Executor"를 분리했던 초기 설계는 폐기되었고, AI 제안·정책 판정·Devnet 결제 트리거가 모두 같은 프로세스 안에서 이루어집니다.
 
 ```
 Cloud Scheduler (5분 주기)

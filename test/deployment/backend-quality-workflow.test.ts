@@ -9,7 +9,7 @@ test("backend quality workflow enforces locked, least-privilege verification", (
   assert.match(workflow, /actions\/checkout@v7/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /actions\/setup-node@v6/);
-  assert.match(workflow, /node-version: 20/);
+  assert.match(workflow, /node-version: 24/);
   assert.match(workflow, /run: npm ci/);
   assert.match(workflow, /run: npm run typecheck/);
   assert.match(workflow, /run: npm test/);

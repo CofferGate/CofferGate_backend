@@ -66,6 +66,17 @@ const sendTransactionResponseSchema = z.object({
   id: z.number(),
 });
 
+const signatureStatusesResponseSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  result: z.object({
+    value: z.array(z.object({
+      confirmationStatus: z.enum(["processed", "confirmed", "finalized"]).nullable(),
+      err: z.unknown().nullable(),
+    }).nullable()),
+  }),
+  id: z.number(),
+});
+
 export interface SolanaTokenBalance {
   amountAtomic: string;
   decimals: number;
@@ -80,6 +91,7 @@ export interface SolanaRpcProviderOptions {
   endpoint: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
+  sleep?: (milliseconds: number) => Promise<void>;
 }
 
 export interface SolanaLatestBlockhash {
@@ -110,10 +122,13 @@ export class SolanaRpcProvider {
   private requestId = 0;
   private readonly timeoutMs: number;
   private readonly fetchImplementation: typeof fetch;
+  private readonly sleep: (milliseconds: number) => Promise<void>;
 
   constructor(private readonly options: SolanaRpcProviderOptions) {
     this.timeoutMs = options.timeoutMs ?? 5_000;
     this.fetchImplementation = options.fetch ?? fetch;
+    this.sleep = options.sleep ?? ((milliseconds) =>
+      new Promise((resolve) => setTimeout(resolve, milliseconds)));
   }
 
   async getTokenBalance(
@@ -215,6 +230,39 @@ export class SolanaRpcProvider {
       throw new SolanaRpcError("Solana RPC returned a mismatched transaction signature.");
     }
     return returnedSignature;
+  }
+
+  async confirmTransaction(
+    signature: string,
+    lastValidBlockHeight: number,
+    options: { pollIntervalMs?: number; maxAttempts?: number } = {},
+  ): Promise<{ commitment: "confirmed" | "finalized" }> {
+    if (!signature || !Number.isSafeInteger(lastValidBlockHeight) || lastValidBlockHeight <= 0) {
+      throw new SolanaRpcError("Transaction confirmation input is invalid.");
+    }
+    const pollIntervalMs = options.pollIntervalMs ?? 500;
+    const maxAttempts = options.maxAttempts ?? 30;
+    if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 0 ||
+      !Number.isSafeInteger(maxAttempts) || maxAttempts <= 0) {
+      throw new SolanaRpcError("Transaction confirmation polling is invalid.");
+    }
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const response = signatureStatusesResponseSchema.parse(
+        await this.request("getSignatureStatuses", [[signature], { searchTransactionHistory: true }]),
+      );
+      const status = response.result.value[0];
+      if (status?.err !== null && status?.err !== undefined) {
+        throw new SolanaRpcError("Solana transaction failed during confirmation.");
+      }
+      if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
+        return { commitment: status.confirmationStatus };
+      }
+      if (await this.getBlockHeight() > lastValidBlockHeight) {
+        throw new SolanaRpcError("Solana transaction expired before confirmation.");
+      }
+      if (attempt + 1 < maxAttempts) await this.sleep(pollIntervalMs);
+    }
+    throw new SolanaRpcError("Solana transaction confirmation timed out.");
   }
 
   private async request(method: string, params: unknown[]): Promise<unknown> {

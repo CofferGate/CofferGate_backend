@@ -18,7 +18,11 @@ if [[ -z "${service_url}" ]]; then
   echo "Cloud Run service URL was not found." >&2
   exit 1
 fi
-identity_token="$(gcloud auth print-identity-token --audiences="${service_url}")"
+if identity_token="$(gcloud auth print-identity-token --audiences="${service_url}" 2>/dev/null)"; then
+  :
+else
+  identity_token="$(gcloud auth print-identity-token)"
+fi
 if [[ -z "${identity_token}" ]]; then
   echo "An identity token could not be created." >&2
   exit 1
@@ -37,7 +41,7 @@ if ((policy.bindings ?? []).some((binding) =>
 ' "${temporary_directory}/iam.json"
 
 curl --fail --silent --show-error \
-  --header="authorization: Bearer ${identity_token}" \
+  --header "authorization: Bearer ${identity_token}" \
   "${service_url}/health/live" >"${temporary_directory}/liveness.json"
 node -e '
 const response = require(process.argv[1]);
@@ -45,7 +49,7 @@ if (response.status !== "ok") throw new Error("Liveness response is invalid.");
 ' "${temporary_directory}/liveness.json"
 
 curl --fail --silent --show-error \
-  --header="authorization: Bearer ${identity_token}" \
+  --header "authorization: Bearer ${identity_token}" \
   "${service_url}/api/v1/system/readiness" >"${temporary_directory}/readiness.json"
 node -e '
 const response = require(process.argv[1]);

@@ -415,7 +415,7 @@ Policy 문서 스키마(`src/contracts/policy.ts`)에는 `minimumReserve`, `maxS
 
 ### 5-6. 테스트 커버리지
 
-`node:test` 기반 121개 자동 테스트로 Policy Gate, Zod 계약, Firestore 원자적 claim, Devnet transaction 생성·simulation·KMS 서명·confirmation·reconciliation, 내부 인증, API, 배포 스크립트를 검증합니다.
+`node:test` 기반 124개 자동 테스트로 Policy Gate, Zod 계약, Firestore 원자적 claim, Devnet transaction 생성·simulation·KMS 서명·confirmation·reconciliation, 내부 인증, API, 배포 스크립트를 검증합니다.
 
 ### 5-7. 프로젝트 구조
 

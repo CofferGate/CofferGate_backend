@@ -15,10 +15,11 @@ import {
   InMemoryProposalRepository,
   type ProposalRepository,
   type DemoAttestationRepository,
+  type DevnetPaymentExecutionRepository,
 } from "./proposal-repository.js";
 
 export interface AppRepositories {
-  proposalRepository: ProposalRepository & DemoAttestationRepository;
+  proposalRepository: ProposalRepository & DemoAttestationRepository & DevnetPaymentExecutionRepository;
   policyRepository: PolicyRepository;
   dailyUsageRepository: DailyUsageRepository;
 }

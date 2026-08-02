@@ -22,7 +22,7 @@ import { DashboardSnapshotService } from "./services/dashboard-snapshot.js";
 import type { TaskRequestAuthorizer } from "./security/task-request-authorizer.js";
 import type { TrustedProposalGenerationService } from "./services/trusted-proposal-generation.js";
 import { createScheduledProposalId } from "./services/scheduled-proposal-id.js";
-import type { DemoAttestationService } from "./services/demo-attestation.js";
+import type { DevnetPaymentExecutionService } from "./services/devnet-payment-execution.js";
 
 const internalProposalGenerationRequestSchema = z.object({
   proposalId: z.string().min(1),
@@ -43,7 +43,7 @@ export interface AppDependencies {
   policyRepository?: PolicyRepository;
   dashboardSnapshotService?: DashboardSnapshotService;
   trustedProposalGenerationService?: TrustedProposalGenerationService;
-  demoAttestationService?: DemoAttestationService;
+  devnetPaymentExecutionService?: DevnetPaymentExecutionService;
   taskRequestAuthorizer?: TaskRequestAuthorizer;
 }
 
@@ -180,7 +180,7 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
   });
 
   if (
-    (dependencies.trustedProposalGenerationService || dependencies.demoAttestationService) &&
+    (dependencies.trustedProposalGenerationService || dependencies.devnetPaymentExecutionService) &&
     !dependencies.taskRequestAuthorizer
   ) {
     throw new Error("Task request authorizer is required for internal routes.");
@@ -272,9 +272,9 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
     });
   }
 
-  if (dependencies.demoAttestationService) {
+  if (dependencies.devnetPaymentExecutionService) {
     app.post<{ Params: { proposalId: string } }>(
-      "/internal/v1/demo-attestations/:proposalId",
+      "/internal/v1/devnet-payments/:proposalId",
       async (request, reply) => {
         const taskToken = request.headers["x-coffergate-task-token"];
         if (!dependencies.taskRequestAuthorizer?.authorize(
@@ -282,13 +282,14 @@ export function createApp(dependencies: AppDependencies): FastifyInstance {
         )) {
           return reply.status(401).send({ status: "UNAUTHORIZED", retryable: false });
         }
-        const result = await dependencies.demoAttestationService?.attest(
+        const result = await dependencies.devnetPaymentExecutionService?.execute(
           request.params.proposalId,
         );
         if (result?.status === "NOT_FOUND") {
           return reply.status(404).send({ ...result, retryable: false });
         }
-        if (result?.status === "NOT_ELIGIBLE" || result?.status === "CONFLICT") {
+        if (result?.status === "NOT_ELIGIBLE" || result?.status === "CONFLICT" ||
+          result?.status === "ALREADY_EXECUTING") {
           return reply.status(409).send({ ...result, retryable: false });
         }
         return reply.status(200).send({ ...result, retryable: false });

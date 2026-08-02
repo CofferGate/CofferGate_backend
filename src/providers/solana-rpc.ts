@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  assertIsFullySignedTransaction,
+  getSignatureFromTransaction,
+  getTransactionDecoder,
+} from "@solana/kit";
 
 const rpcErrorSchema = z.object({
   code: z.number(),
@@ -30,6 +35,37 @@ const blockHeightResponseSchema = z.object({
   id: z.number(),
 });
 
+const latestBlockhashResponseSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  result: z.object({
+    context: z.object({ slot: z.number().int().nonnegative() }).passthrough(),
+    value: z.object({
+      blockhash: z.string().min(1),
+      lastValidBlockHeight: z.number().int().positive().safe(),
+    }),
+  }),
+  id: z.number(),
+});
+
+const simulationResponseSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  result: z.object({
+    context: z.object({ slot: z.number().int().nonnegative() }).passthrough(),
+    value: z.object({
+      err: z.unknown().nullable(),
+      logs: z.array(z.string()).nullable(),
+      unitsConsumed: z.number().int().nonnegative().nullable().optional(),
+    }).passthrough(),
+  }),
+  id: z.number(),
+});
+
+const sendTransactionResponseSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  result: z.string().min(1),
+  id: z.number(),
+});
+
 export interface SolanaTokenBalance {
   amountAtomic: string;
   decimals: number;
@@ -44,6 +80,20 @@ export interface SolanaRpcProviderOptions {
   endpoint: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
+}
+
+export interface SolanaLatestBlockhash {
+  blockhash: string;
+  lastValidBlockHeight: number;
+  slot: number;
+}
+
+export interface SolanaSimulationResult {
+  ok: boolean;
+  slot: number;
+  unitsConsumed?: number;
+  logs: string[];
+  error?: unknown;
 }
 
 export class SolanaRpcError extends Error {
@@ -110,6 +160,63 @@ export class SolanaRpcProvider {
     ).result;
   }
 
+  async getLatestBlockhash(): Promise<SolanaLatestBlockhash> {
+    const response = latestBlockhashResponseSchema.parse(
+      await this.request("getLatestBlockhash", [{ commitment: "confirmed" }]),
+    );
+    return {
+      ...response.result.value,
+      slot: response.result.context.slot,
+    };
+  }
+
+  async simulateTransaction(transaction: Buffer): Promise<SolanaSimulationResult> {
+    assertTransactionSize(transaction);
+    const response = simulationResponseSchema.parse(
+      await this.request("simulateTransaction", [
+        transaction.toString("base64"),
+        {
+          commitment: "confirmed",
+          encoding: "base64",
+          replaceRecentBlockhash: false,
+          sigVerify: false,
+        },
+      ]),
+    );
+    const result = response.result.value;
+    return {
+      ok: result.err === null,
+      slot: response.result.context.slot,
+      ...(result.unitsConsumed === null || result.unitsConsumed === undefined
+        ? {}
+        : { unitsConsumed: result.unitsConsumed }),
+      logs: result.logs ?? [],
+      ...(result.err === null ? {} : { error: result.err }),
+    };
+  }
+
+  async sendTransaction(transaction: Buffer): Promise<string> {
+    assertTransactionSize(transaction);
+    const decodedTransaction = getTransactionDecoder().decode(transaction);
+    assertIsFullySignedTransaction(decodedTransaction);
+    const expectedSignature = getSignatureFromTransaction(decodedTransaction);
+    const returnedSignature = sendTransactionResponseSchema.parse(
+      await this.request("sendTransaction", [
+        transaction.toString("base64"),
+        {
+          encoding: "base64",
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+          maxRetries: 3,
+        },
+      ]),
+    ).result;
+    if (returnedSignature !== expectedSignature) {
+      throw new SolanaRpcError("Solana RPC returned a mismatched transaction signature.");
+    }
+    return returnedSignature;
+  }
+
   private async request(method: string, params: unknown[]): Promise<unknown> {
     const id = ++this.requestId;
     const response = await this.fetchImplementation(this.options.endpoint, {
@@ -132,5 +239,11 @@ export class SolanaRpcProvider {
       );
     }
     return payload;
+  }
+}
+
+function assertTransactionSize(transaction: Buffer): void {
+  if (transaction.length === 0 || transaction.length > 1_232) {
+    throw new SolanaRpcError("Solana transaction has an invalid size.");
   }
 }

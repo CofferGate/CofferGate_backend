@@ -16,6 +16,11 @@ export interface ProposalRepository {
   ): Promise<ProposalEvaluationSaveResult>;
 }
 
+export interface DevnetPaymentExecutionRepository {
+  findById(proposalId: string): Promise<Proposal | null>;
+  claimDevnetPayment(proposalId: string): Promise<ProposalExecutionClaimResult>;
+}
+
 export interface DemoAttestationRepository {
   findById(proposalId: string): Promise<Proposal | null>;
   saveDemoAttestation(
@@ -32,6 +37,12 @@ export type ProposalEvaluationSaveResult =
   | "SAVED"
   | "NOT_FOUND"
   | "STATUS_CONFLICT";
+
+export type ProposalExecutionClaimResult =
+  | { status: "CLAIMED"; proposal: Proposal }
+  | { status: "ALREADY_CLAIMED"; proposal: Proposal }
+  | { status: "NOT_FOUND" }
+  | { status: "NOT_ELIGIBLE" };
 
 export type ProposalDemoAttestationSaveResult =
   | "SAVED"
@@ -141,6 +152,22 @@ export class FirestoreProposalRepository implements ProposalRepository {
     });
   }
 
+  async claimDevnetPayment(proposalId: string): Promise<ProposalExecutionClaimResult> {
+    const reference = this.database.collection(this.collectionName).doc(proposalId);
+    return this.database.runTransaction(async (transaction) => {
+      const document = await transaction.get(reference);
+      if (!document.exists) return { status: "NOT_FOUND" };
+      const current = this.parseDocument(document.id, document.data());
+      if (current.status === "EXECUTING") {
+        return { status: "ALREADY_CLAIMED", proposal: current };
+      }
+      if (!isDevnetPaymentEligible(current)) return { status: "NOT_ELIGIBLE" };
+      const claimed = createExecutionClaim(current);
+      transaction.set(reference, claimed);
+      return { status: "CLAIMED", proposal: claimed };
+    });
+  }
+
   async saveDemoAttestation(
     proposal: Proposal,
   ): Promise<ProposalDemoAttestationSaveResult> {
@@ -224,6 +251,18 @@ export class InMemoryProposalRepository implements ProposalRepository {
     return "SAVED";
   }
 
+  async claimDevnetPayment(proposalId: string): Promise<ProposalExecutionClaimResult> {
+    const current = this.proposals.get(proposalId);
+    if (!current) return { status: "NOT_FOUND" };
+    if (current.status === "EXECUTING") {
+      return { status: "ALREADY_CLAIMED", proposal: current };
+    }
+    if (!isDevnetPaymentEligible(current)) return { status: "NOT_ELIGIBLE" };
+    const claimed = createExecutionClaim(current);
+    this.proposals.set(proposalId, claimed);
+    return { status: "CLAIMED", proposal: claimed };
+  }
+
   async saveDemoAttestation(
     proposal: Proposal,
   ): Promise<ProposalDemoAttestationSaveResult> {
@@ -240,6 +279,21 @@ export class InMemoryProposalRepository implements ProposalRepository {
     this.proposals.set(validatedProposal.proposalId, validatedProposal);
     return "SAVED";
   }
+}
+
+function isDevnetPaymentEligible(proposal: Proposal): boolean {
+  return proposal.status === "POLICY_APPROVED" &&
+    proposal.decision === "AUTO" &&
+    proposal.action === "SWAP" &&
+    proposal.execution === undefined;
+}
+
+function createExecutionClaim(proposal: Proposal): Proposal {
+  return proposalSchema.parse({
+    ...proposal,
+    status: "EXECUTING",
+    execution: { mode: "demo", kmsRequested: false },
+  });
 }
 
 function validateDemoAttestation(proposal: Proposal): Proposal {

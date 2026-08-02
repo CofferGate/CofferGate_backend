@@ -158,6 +158,19 @@ test("Firestore proposal repository atomically saves one policy evaluation", asy
   );
 });
 
+test("Firestore proposal repository atomically claims one Devnet payment", async () => {
+  const approvedProposal: Proposal = { ...proposal, decision: "AUTO" };
+  const repository = new FirestoreProposalRepository(createDatabase({
+    proposals: { [proposal.proposalId]: approvedProposal },
+  }));
+
+  const first = await repository.claimDevnetPayment(proposal.proposalId);
+  assert.equal(first.status, "CLAIMED");
+  const retry = await repository.claimDevnetPayment(proposal.proposalId);
+  assert.equal(retry.status, "ALREADY_CLAIMED");
+  assert.equal((await repository.findById(proposal.proposalId))?.status, "EXECUTING");
+});
+
 
 test("Firestore proposal evaluation reports missing documents", async () => {
   const repository = new FirestoreProposalRepository(createDatabase({}));

@@ -1,6 +1,6 @@
 # CofferGate Backend — 실행 가이드
 
-이 README는 Google X Solana AI Agentic Hackathon 제출 요건인 **재현 가능한 코드 + 실행 가이드**를 충족하기 위한 문서입니다. 배경지식 없이도 CofferGate 백엔드를 실행하고, "온체인 잔고 관찰 → Vertex AI 제안 → 결정론적 정책 판정 → Cloud KMS Attestation" 흐름을 확인할 수 있도록 구성했습니다.
+이 README는 Google X Solana AI Agentic Hackathon 제출 요건인 **재현 가능한 코드 + 실행 가이드**를 충족하기 위한 문서입니다. "온체인 잔고 관찰 → Vertex AI 제안 → 결정론적 정책 판정 → Simulation → Cloud KMS 서명 → Solana Devnet 제출 → Reconciliation" 흐름을 확인할 수 있도록 구성했습니다.
 
 심사 목적에 따라 아래 경로 중 하나를 선택하면 됩니다.
 
@@ -11,7 +11,7 @@
 | 현재 배포된 Devnet 통합 데모 확인 | **1번** | `coffergate-devnet` 프로젝트 접근 권한 |
 | 자신의 GCP 프로젝트에 새 환경 배포 | **3번** | GCP 프로젝트 소유자 또는 인프라 설정 권한 |
 
-> **데모 범위:** 현재 제출 버전은 Solana Devnet의 실제 지갑·토큰 잔고를 읽고, AI 제안과 정책 판정 후 Cloud KMS Ed25519 Attestation을 생성합니다. Jupiter Swap 트랜잭션을 제출하거나 자산을 이동하지 않습니다. `SIMULATED`는 거래 체결이 아니라 **정책 통과 및 서명 증명 완료**를 의미합니다.
+> **데모 범위:** 실제 금융자산과 Mainnet은 사용하지 않습니다. 고정된 Solana Devnet 데모 SPL 토큰 1개를 Cloud KMS Ed25519 키로 서명·제출하고, `confirmed` 확인과 전후 잔액 `MATCHED` 검증까지 수행합니다. 실제 Jupiter Swap은 수행하지 않습니다.
 
 ## 0. 준비물
 
@@ -52,9 +52,9 @@ curl -s http://localhost:8085/api/v1/system/readiness | jq
 curl -s http://localhost:8085/api/v1/proposals | jq '.data[] | {proposalId, action, decision, status}'
 ```
 
-Cloud Scheduler가 5분마다 자동으로 Proposal을 생성하므로 서비스가 켜져 있었다면 이미 몇 건이 쌓여 있습니다. `decision`이 `"AUTO"`면 `status`는 `"SIMULATED"`(KMS 서명 완료), `decision`이 `"BLOCK"`이면 실행이 차단된 것입니다.
+Cloud Scheduler가 5분마다 Proposal을 생성합니다. `decision` `AUTO`의 정상 완료 상태는 `RECONCILED`, 정책 위반은 `BLOCKED`, 외부 실행 실패는 `FAILED`입니다.
 
-### 1-4. Proposal 하나를 자세히 보기 — Attestation 확인
+### 1-4. Proposal 하나를 자세히 보기 — 실행·정산 확인
 
 위 목록에서 `proposalId` 하나를 골라 넣습니다.
 
@@ -62,7 +62,8 @@ Cloud Scheduler가 5분마다 자동으로 Proposal을 생성하므로 서비스
 curl -s http://localhost:8085/api/v1/proposals/<proposalId> | jq '.data | {decision, status, ruleChecks, execution}'
 ```
 
-- `decision: "AUTO"`인 건은 `execution.attestationSignature`, `execution.attestedAt`이 채워져 있습니다 — Cloud KMS Ed25519로 실제 서명된 증거입니다.
+- `decision: "AUTO"`, `status: "RECONCILED"`인 건은 simulation, KMS key version, transaction signature, commitment, reconciliation을 포함합니다.
+- `execution.reconciliation.status: "MATCHED"`면 예상 변화량과 실제 Devnet 잔액 변화량이 일치한 것입니다.
 - `decision: "BLOCK"`인 건은 `execution.kmsRequested: false`입니다 — 서명 자체가 요청되지 않았다는 뜻입니다.
 - `ruleChecks` 배열을 보면 15개 규칙 중 어떤 것이 PASS/FAIL했는지 그대로 보입니다.
 
@@ -98,7 +99,7 @@ npm run dev
 curl -s http://localhost:8080/health/live
 ```
 
-`{"status":"ok"}`가 나오면 서버 자체는 정상입니다. **주의**: 기본 모드(`REPOSITORY_MODE=memory`)에서는 Proposal 생성 API(`/internal/v1/*`)가 아예 등록되지 않습니다. AI 제안·정책 판정·Attestation까지 이어지는 실제 데모 흐름을 로컬에서 보려면 아래 2-3 단계가 필요합니다.
+`{"status":"ok"}`가 나오면 서버 자체는 정상입니다. 기본 메모리 모드에서는 내부 자동 실행 API가 등록되지 않습니다. 전체 Devnet 흐름은 2-3 단계의 GCP 연결이 필요합니다.
 
 ### 2-3. 팀 GCP 환경과 연결해 전체 흐름 재현하기
 
@@ -122,6 +123,10 @@ export OPERATIONS_WALLET_ADDRESS=<wallet-address>
 export USDC_MINT=<usdc-mint>
 export USDC_TOKEN_ACCOUNT=<usdc-token-account>
 export TARGET_USDC_BALANCE=20
+export DEVNET_PAYMENT_DESTINATION_OWNER_ADDRESS=<recipient-wallet-address>
+export DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT=<recipient-associated-token-account>
+export DEVNET_PAYMENT_AMOUNT_ATOMIC=1000000
+export DEVNET_PAYMENT_DECIMALS=6
 export JUPITER_API_KEY=<jupiter-api-key>
 export CLOUD_KMS_KEY_VERSION=projects/<project-id>/locations/asia-northeast3/keyRings/coffergate/cryptoKeys/demo-attestation/cryptoKeyVersions/1
 export INTERNAL_TASK_TOKEN=$(gcloud secrets versions access latest \
@@ -158,9 +163,9 @@ curl -s -X POST http://localhost:8080/internal/v1/proposals/generate \
   -d "{\"proposalId\":\"$PROPOSAL_ID\"}" | jq
 ```
 
-응답의 `decision`(AUTO/BLOCK)과 `ruleChecks`로 어떤 규칙이 통과·실패했는지 바로 볼 수 있습니다. AUTO SWAP이면 Cloud Tasks가 같은 Firestore를 사용하는 배포 서비스의 Attestation 엔드포인트를 호출합니다.
+응답의 `decision`과 `ruleChecks`로 정책 결과를 확인합니다. AUTO SWAP이면 Cloud Tasks가 배포 서비스의 Devnet 결제 엔드포인트를 호출합니다.
 
-**6) Attestation 결과 확인**
+**6) Devnet 결제 결과 확인**
 
 ```bash
 sleep 10
@@ -168,7 +173,7 @@ curl -s "http://localhost:8080/api/v1/proposals/$PROPOSAL_ID" \
   | jq '.data | {decision, status, execution}'
 ```
 
-`status: "SIMULATED"`와 `execution.attestationSignature`가 채워지면 성공입니다. Cloud Tasks가 로컬호스트를 호출할 수 없으므로 `CLOUD_TASKS_TARGET_BASE_URL`에는 `localhost`가 아닌 접근 가능한 HTTPS Cloud Run URL을 사용해야 합니다.
+`status: "RECONCILED"`, `execution.commitment: "confirmed"`, `execution.reconciliation.status: "MATCHED"`면 성공입니다. `transactionSignature`는 Solana Explorer에서 Devnet 거래로 확인할 수 있습니다.
 
 ### 2-4. 테스트 실행
 
@@ -178,7 +183,7 @@ npm test
 npm run build
 ```
 
-현재 기준으로 typecheck, 104개 테스트, TypeScript build가 모두 통과해야 합니다.
+현재 기준으로 typecheck, 전체 자동 테스트, TypeScript build가 모두 통과해야 합니다.
 
 ---
 
@@ -256,14 +261,14 @@ Secret Manager 값에 트레일링 줄바꿈이 들어가면 바이트 길이가
 **모든 Proposal이 `BLOCK`으로만 나옴**
 `policies/current` 문서가 없으면 `POLICY_CONFIGURED` 규칙이 무조건 FAIL입니다. `node scripts/seed-policy.mjs`를 실행했는지 확인하세요.
 
-**로컬(2-3단계)에서 AUTO 판정 후 `SIMULATED`로 안 바뀜**
+**로컬(2-3단계)에서 AUTO 판정 후 `RECONCILED`로 안 바뀜**
 Cloud Tasks는 로컬호스트를 호출할 수 없습니다. `CLOUD_TASKS_TARGET_BASE_URL`이 같은 Firestore와 KMS 설정을 사용하는 HTTPS Cloud Run URL인지, Tasks 서비스 계정에 해당 서비스의 `roles/run.invoker`가 있는지 확인하세요.
 
 **`/api/v1/dashboard`의 `balances`가 비어 있음**
 `OPERATIONS_WALLET_ADDRESS`/`USDC_MINT`/`USDC_TOKEN_ACCOUNT` 값과 Devnet RPC 연결을 확인하세요. 로그의 `dashboard.wallet_state.failed` 이벤트로 원인을 볼 수 있습니다.
 
 **Proposal의 `dataAsOf`가 전부 오래된 날짜(예: 2024년)로 찍힘**
-버그가 아닙니다. `dataAsOf`는 잔고 관찰 시각과 Jupiter 가격 관찰 시각 중 더 이른 쪽을 씁니다(`proposal-generation-context.ts`의 `earliestObservation`). 잔고 관찰 시각은 매번 실제 현재 시각을 쓰지만, Jupiter Price API가 응답에 담아주는 `createdAt` 필드(`jupiter-price.ts`)는 가격 자체와 무관하게 오래된 값일 수 있고, 이게 항상 더 이르기 때문에 `dataAsOf`로 뽑힙니다. 가격 조회와 AI 판단, KMS 서명은 매 사이클 실제로 새로 일어납니다 — `execution.attestationSignature`가 Proposal마다 다르고 `execution.attestedAt`이 Scheduler 주기(5분)와 정확히 맞는지 보면 확인할 수 있습니다.
+`dataAsOf`는 잔고 관찰 시각과 Jupiter 가격 조회 시각 중 더 이른 값을 사용합니다(`proposal-generation-context.ts`의 `earliestObservation`). 가격 조회 시각은 백엔드가 Jupiter 응답을 성공적으로 받은 현재 시각으로 기록하므로, 각 Proposal의 근거 데이터 시점을 실제 실행 주기와 일치시킵니다.
 
 ---
 
@@ -285,11 +290,11 @@ Cloud Run: coffergate-backend (단일 Fastify 서비스)
    ├─ Jupiter Price API          → 가격 조회 (견적만, 체결 없음)
    ├─ Policy Gate                → AUTO / BLOCK 판정 (코드, AI 아님)
    ├─ Firestore                  → policies / proposals / dailyUsage
-   ├─ Cloud Tasks                → AUTO 승인 시 Attestation 비동기 트리거
-   └─ Cloud KMS                  → Ed25519 Attestation 서명
+   ├─ Cloud Tasks                → AUTO 승인 시 Devnet 결제 비동기 트리거
+   └─ Cloud KMS                  → Solana transaction message Ed25519 서명
 ```
 
-**Devnet 데모는 실제 온체인 Swap을 제출하지 않습니다.** 심사 중 실자산이 이동하는 위험을 피하기 위한 의도적 선택이며, 같은 구조 위에 Mainnet 실행까지 확장하는 것을 다음 단계 로드맵으로 두고 있습니다.
+**Devnet 데모는 실제 온체인 트랜잭션을 제출하지만 실제 금융자산은 사용하지 않습니다.** 고정 Mint·계정·수량의 데모 SPL 토큰만 이동하며 Mainnet과 Jupiter Swap은 제외합니다.
 
 ### 5-2. 환경 변수 전체 목록
 
@@ -310,6 +315,10 @@ Cloud Run: coffergate-backend (단일 Fastify 서비스)
 | `USDC_MINT` | — | ✅ | USDC Mint 주소 |
 | `USDC_TOKEN_ACCOUNT` | — | ✅ | 운영 지갑의 USDC 토큰 계정 |
 | `TARGET_USDC_BALANCE` | — | ✅ | 목표 USDC 잔고(운영자 설정, 숫자 문자열) |
+| `DEVNET_PAYMENT_DESTINATION_OWNER_ADDRESS` | — | ✅ | 고정 수신 Devnet 지갑 |
+| `DEVNET_PAYMENT_DESTINATION_TOKEN_ACCOUNT` | — | ✅ | 고정 수신 ATA |
+| `DEVNET_PAYMENT_AMOUNT_ATOMIC` | — | ✅ | 고정 데모 전송량(atomic) |
+| `DEVNET_PAYMENT_DECIMALS` | `6` | | 데모 Mint decimals |
 | `PROPOSAL_TTL_SECONDS` | `300` | | Proposal 만료 시간(초) |
 | `JUPITER_API_KEY` | — | ✅ | Jupiter Price API 키 |
 | `JUPITER_PRICE_API_URL` | `https://api.jup.ag/price/v3` | | Jupiter 가격 조회 엔드포인트 |
@@ -320,7 +329,7 @@ Cloud Run: coffergate-backend (단일 Fastify 서비스)
 | `CLOUD_TASKS_QUEUE` | — | ✅ | Cloud Tasks 큐 이름 |
 | `CLOUD_TASKS_TARGET_BASE_URL` | — | ✅ | Cloud Run 서비스 URL |
 | `CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL` | — | ✅ | Cloud Tasks가 OIDC로 사용할 서비스 계정 |
-| `CLOUD_TASKS_SCHEDULE_DELAY_SECONDS` | `5` | | Attestation 작업 지연 시간(초) |
+| `CLOUD_TASKS_SCHEDULE_DELAY_SECONDS` | `5` | | Devnet 결제 작업 지연 시간(초) |
 | `GOOGLE_CLOUD_PROJECT` | — | ✅ | GCP 프로젝트 ID |
 | `VERTEX_AI_LOCATION` | `us-central1` | | Vertex AI 리전 |
 | `VERTEX_AI_MODEL` | `gemini-2.5-flash` | | 사용 모델 |
@@ -361,7 +370,7 @@ Policy 문서 스키마(`src/contracts/policy.ts`)에는 `minimumReserve`, `maxS
 | GET | `/health/live` | 프로세스 생존 확인. 의존성 점검 없음 |
 | GET | `/api/v1/system/readiness` | `control-plane`, `vertex-ai`, `firestore`, `private-executor`, `cloud-kms`, `jupiter-api`, `solana-rpc` 7개 서비스 상태 |
 | GET | `/api/v1/proposals` | Proposal 목록(최신순) |
-| GET | `/api/v1/proposals/:proposalId` | Proposal 상세(Policy 평가 결과 + Attestation 포함) |
+| GET | `/api/v1/proposals/:proposalId` | Proposal 상세(Policy·Simulation·KMS·Transaction·Reconciliation) |
 | GET | `/api/v1/policy/current` | 현재 Policy 전체 |
 | GET | `/api/v1/dashboard` | 지갑 잔고(SOL/USDC), 목표 잔고, 당일 사용량, Policy 요약 |
 
@@ -373,18 +382,18 @@ Policy 문서 스키마(`src/contracts/policy.ts`)에는 `minimumReserve`, `maxS
 | --- | --- | --- | --- |
 | POST | `/internal/v1/proposals/generate` | 운영자/수동 | Body `{ "proposalId": string }` — Observe→Propose→Decide 1회 실행 |
 | POST | `/internal/v1/proposals/generate/scheduled` | Cloud Scheduler | `x-cloudscheduler-jobname`/`x-cloudscheduler-scheduletime` 헤더로 결정론적 Proposal ID 생성(중복 방지) |
-| POST | `/internal/v1/demo-attestations/:proposalId` | Cloud Tasks(AUTO 시 자동 큐잉) | 해당 Proposal에 Cloud KMS Attestation 생성 |
+| POST | `/internal/v1/devnet-payments/:proposalId` | Cloud Tasks(AUTO 시 자동 큐잉) | 고정 Devnet 데모 토큰 서명·제출·정산 |
 
 응답 상태 코드: `200`(성공), `401 UNAUTHORIZED`, `400 INVALID_REQUEST`/`INVALID_SCHEDULER_REQUEST`, `409 POLICY_NOT_CONFIGURED`/`CONFLICT`/`ID_CONFLICT`, `503 PERSISTENCE_INCONSISTENCY`(재시도 가능, `Retry-After: 5`).
 
-`execution` 스키마에는 `transactionSignature`, `reconciliation`, `simulation` 등 실 체결용 필드도 정의돼 있지만, 현재 Devnet 데모 흐름에서는 채워지지 않습니다. Mainnet 실행을 붙일 때 쓸 필드로 스키마에 미리 확보해 둔 상태입니다.
+`AUTO` 정상 완료 Proposal은 `RECONCILED` 상태이며 `simulation`, `kmsKeyVersion`, `transactionSignature`, `commitment`, `reconciliation` 증거를 모두 포함합니다.
 
 ### 5-5. IAM 요약
 
 | 서비스 계정 | 용도 | 권한 |
 | --- | --- | --- |
 | 런타임 SA(`coffergate-backend`) | Cloud Run 서비스 자체 | Firestore 읽기/쓰기, Vertex AI 호출, Cloud Tasks 큐잉, Cloud KMS 서명, Secret Manager 접근 |
-| Cloud Tasks SA | Attestation 트리거 | 대상 Cloud Run `run.invoker`만 |
+| Cloud Tasks SA | Devnet 결제 트리거 | 대상 Cloud Run `run.invoker`만 |
 | Cloud Scheduler SA | 5분 주기 Proposal 생성 트리거 | 대상 Cloud Run `run.invoker`만 |
 | 프론트엔드 런타임 SA | 프론트 서버에서 백엔드 조회 API 호출 | 대상 Cloud Run `run.invoker`만 |
 
@@ -392,7 +401,7 @@ Policy 문서 스키마(`src/contracts/policy.ts`)에는 `minimumReserve`, `maxS
 
 ### 5-6. 테스트 커버리지
 
-`node:test` 기반 35개 파일, 104개 테스트(`npm test`). 주요 커버리지: `services/policy-gate.test.ts`(15개 규칙 전체 분기), `contracts/*.test.ts`(Zod 스키마), `providers/cloud-kms-attestation.test.ts`(Attestation 서명 흐름), `security/task-request-authorizer.test.ts`(내부 인증), `api/*.test.ts`(엔드포인트별 계약), `deployment/*.test.ts`(배포 스크립트 회귀 방지). CI(GitHub Actions)는 모든 PR/`main` Push에서 의존성 설치 → typecheck → test → 빌드 → 의존성 보안 검사 → Docker 이미지 빌드를 강제합니다.
+`node:test` 기반 120개 자동 테스트로 Policy Gate, Zod 계약, Firestore 원자적 claim, Devnet transaction 생성·simulation·KMS 서명·confirmation·reconciliation, 내부 인증, API, 배포 스크립트를 검증합니다.
 
 ### 5-7. 프로젝트 구조
 
@@ -402,7 +411,7 @@ src/
   server.ts               부트스트랩(config/repositories/services 조립 후 listen)
   config.ts               환경 변수 스키마
   contracts/               Zod 계약(api, console, enums, policy, proposal, system-readiness)
-  services/                Policy Gate, Proposal 생성/평가, Attestation, Dashboard, Readiness
+  services/                Policy Gate, Proposal 생성/평가, Devnet 결제, Dashboard, Readiness
   providers/                Vertex AI, Solana RPC, Jupiter, Cloud KMS, Cloud Tasks 연동
   repositories/             Firestore/메모리 리포지토리
   security/                 내부 Task Token 인증
@@ -412,13 +421,13 @@ scripts/
   deploy-scheduler.sh        Cloud Scheduler 배포
   verify-devnet-runtime.sh   배포 후 IAM/Liveness/Readiness 검증
   seed-policy.mjs            초기 Policy Firestore 시딩
-test/                     35개 테스트 파일(node:test)
+test/                     자동 테스트(node:test)
 ```
 
 ### 5-8. Contract policy
 
 - 외부 API는 camelCase DTO를 반환하며 `{ data, meta }` envelope를 사용합니다.
 - `BLOCK` 응답은 `kmsRequested: false`로 서명되지 않은 경로를 증명합니다.
-- 승인된 `AUTO` Proposal은 `SIMULATED` 상태와 Cloud KMS Attestation을 기록합니다.
+- 승인된 `AUTO` Proposal은 실제 Devnet 실행 후 `RECONCILED` 상태와 전체 증거를 기록합니다.
 - 브라우저는 내부 API와 Cloud KMS에 직접 접근하지 않습니다.
-- Devnet 데모는 실제 Swap이나 자산 이동을 수행하지 않습니다.
+- Devnet 데모는 실제 금융자산과 Mainnet을 사용하지 않고 고정된 데모 SPL 토큰만 이동합니다.

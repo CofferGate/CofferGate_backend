@@ -2,10 +2,15 @@
 
 이 README는 Google X Solana AI Agentic Hackathon 제출 요건인 **재현 가능한 코드 + 실행 가이드**를 충족하기 위한 문서입니다. "온체인 잔고 관찰 → Vertex AI 제안 → 결정론적 정책 판정 → Simulation → Cloud KMS 서명 → Solana Devnet 제출 → Reconciliation" 흐름을 확인할 수 있도록 구성했습니다.
 
+> **공개 라이브 데모:** [https://coffergate-frontend-319878141012.asia-northeast3.run.app](https://coffergate-frontend-319878141012.asia-northeast3.run.app)
+>
+> 별도 GCP 권한 없이 프론트엔드가 비공개 백엔드를 IAM으로 호출하는 Devnet 통합 흐름을 확인할 수 있습니다.
+
 심사 목적에 따라 아래 경로 중 하나를 선택하면 됩니다.
 
 | 목적 | 권장 경로 | 필요한 권한 |
 | --- | --- | --- |
+| 공개 화면에서 Devnet 통합 결과 확인 | **위 라이브 데모** | 없음 |
 | 저장소 코드와 API를 가장 빠르게 재현 | **2-1 ~ 2-2** | 없음 |
 | 전체 테스트·타입·빌드 검증 | **2-4** | 없음 |
 | 현재 배포된 Devnet 통합 데모 확인 | **1번** | `coffergate-devnet` 프로젝트 접근 권한 |
@@ -369,7 +374,7 @@ Cloud Run: coffergate-backend (단일 Fastify 서비스)
 | `MAX_TRANSACTION_USD` | 건당 금액이 `maxTransactionUsd` 이하 |
 | `DAILY_LIMIT_USD` | 당일 누적 + 이번 금액이 `dailyLimitUsd` 이하 |
 
-`NO_ACTION` Proposal은 상단 4개 공통 규칙만 평가됩니다. Policy 문서가 없으면 `POLICY_CONFIGURED` 규칙 하나만 무조건 FAIL로 채워집니다. 판정 로직(`hasFailure ? "BLOCK" : hasReview ? "ESCALATE" : "AUTO"`)에 `ESCALATE` 분기가 남아 있지만, 모든 규칙이 `PASS`/`FAIL` 이진 결과만 반환해 `hasReview`는 항상 `false`입니다 — 실제로 발생하는 판정은 `AUTO`/`BLOCK` 두 가지뿐입니다. `BLOCK`이면 `execution.kmsRequested`가 무조건 `false`로 고정됩니다.
+`NO_ACTION` Proposal은 상단 4개 공통 규칙만 평가됩니다. Policy 문서가 없으면 `POLICY_CONFIGURED` 규칙 하나만 무조건 FAIL로 채워집니다. 현재 규칙은 `PASS`/`FAIL` 이진 결과만 반환하므로 실제 정책 판정은 `AUTO`/`BLOCK` 두 가지입니다. `BLOCK`이면 `execution.kmsRequested`가 무조건 `false`로 고정됩니다.
 
 Policy 문서 스키마(`src/contracts/policy.ts`)에는 `minimumReserve`, `maxSlippageBps`, `maxPriceImpactBps`, `quoteMaxAgeSeconds`, `allowedPrograms`, `allowedSigners`, `simulationRequired` 필드도 있지만, 위 표에 없다는 건 현재 Policy Gate가 아직 평가하지 않는다는 뜻입니다. Mainnet 실 체결을 붙일 때 쓸 필드로 미리 확보해 둔 것입니다.
 
